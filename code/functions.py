@@ -1,6 +1,9 @@
+from random import random
 import pandas as pd
 import matplotlib
 import numpy as np
+import time
+import csv
 from sklearn import metrics
 
 import itertools
@@ -24,10 +27,77 @@ matplotlib.rc('font', **font)
 pd.set_option('display.max_columns',None)
 pd.set_option('display.max_rows',25)
 
-# only display whole years in figures
+from pathlib import Path
+top = Path(__file__ + '../../..').resolve()
+# columns for alphaVantage output
+AV_COLUMNS = ['time', 'open', 'high', 'low', 'close', 'volume']
+
+# displaying years / months in figures
 years = mdates.YearLocator()
 years_fmt = mdates.DateFormatter('%Y')
+months = mdates.MonthLocator()
+months_fmt = mdates.DateFormatter('%B %Y')
 print('Functions loaded.')
+
+def get_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
+    df = pd.DataFrame(columns=AV_COLUMNS)
+    df.set_index('time', inplace=True)
+    df.index = pd.to_datetime(df.index)
+    print(f'Requesting all data slices for {symbol}...\n')
+    for y in range(y):
+        for m in range(m):
+            print(y,m)
+            try:
+                fieldnames, data_reader, data_slice, tries = get_next_data_slice(symbol, ts, y, m, 0, verbose)
+            except TypeError:
+                print('Error in get_intraday_extended function call.') if verbose == 1 else None
+                raise
+            except:
+                print("Error in running get_next_data_slice function:", sys.exc_info()[0]) if verbose == 1 else None
+                raise
+            else:
+                df_month = pd.DataFrame(data_reader, columns=fieldnames)
+                df_month.set_index('time', inplace=True)
+                df_month.index = pd.to_datetime(df_month.index)
+                if verbose == 1:
+                    print('First record:')
+                    print(df_month.head(1))
+                    print('Last record:')
+                    print(df_month.tail(1))
+                df = df.append(df_month)
+                print(f"Processed and appended {data_slice} to DataFrame.\n") if verbose == 1 else None
+    print(f'Finished getting all data slices for {symbol}') if verbose == 1 else None
+    return df
+
+def get_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
+    data_slice = f'year{y+1}month{m+1}'
+    try:
+        if verbose==1:
+            if tries>0:
+                print(f'Re-requesting slice: {data_slice}')
+            else:
+                print(f'Requesting slice: {data_slice}')
+        data_reader, meta_data = ts.get_intraday_extended(symbol=symbol, interval='60min', slice=data_slice)
+    except TypeError:
+        raise
+    else:
+        try:
+            fieldnames = next(data_reader)
+#             print(fieldnames)
+            assert(len(fieldnames) == 6), f"Error: Header row length is {len(fieldnames)}, expected 6."
+#             assert(fieldnames[0]==AV_COLUMNS[0]), f"DateTime index missing from AlphaVantage output."
+            assert(fieldnames==AV_COLUMNS), f"Columns mismatch from AlphaVantage output."
+        except AssertionError as e:
+            sleep_time = 10 + tries + tries*random()
+            if verbose == 1:
+                print(e)
+                print(f'Sleeping for {sleep_time}...')
+            time.sleep(sleep_time)
+            tries+=1
+            fieldnames, data_reader, data_slice, tries = get_next_data_slice(symbol, ts, y, m, tries=tries, verbose=verbose)
+    return fieldnames, data_reader, data_slice, tries
+
+
 
 def melt_data(df):
     '''
@@ -89,7 +159,7 @@ def test_stationarity_all_zips(df_dict, diffs=0):
             dfoutput['Critical Value (%s)' %key] = value
         print(dfoutput[1])
 
-def plot_pacf_housing(df_all, bedrooms):
+def plot_pacf_with_diff(df_all, bedrooms):
     pacf_fig, ax = plt.subplots(1, 2, figsize=(12, 6))
     pacf_fig.suptitle(f'Partial Autocorrelations of {bedrooms}-Bedroom Time Series for Entire San Francisco Data Set', fontsize=18)
     plot_pacf(df_all, ax=ax[0])
@@ -104,7 +174,7 @@ def plot_pacf_housing(df_all, bedrooms):
     pacf_fig.subplots_adjust(top=0.9)
     plt.savefig(f'images/{bedrooms}_bdrm_PACF.png')
 
-def plot_acf_housing(df_all, bedrooms):
+def plot_acf_with_diff(df_all, bedrooms):
     acf_fig, ax = plt.subplots(1, 3, figsize=(18, 6))
     acf_fig.suptitle(f'Autocorrelations of {bedrooms}-Bedroom Time Series for Entire San Francisco Data Set', fontsize=18)
     plot_acf(df_all, ax=ax[0])
@@ -123,8 +193,8 @@ def plot_acf_housing(df_all, bedrooms):
     acf_fig.subplots_adjust(top=0.9)
     plt.savefig(f'images/{bedrooms}_bdrm_PACF.png')
 
-def plot_seasonal_decomposition(df_all, bedrooms):
-    decomp = seasonal_decompose(df_all, freq=12)
+def plot_seasonal_decomposition(df_all, symbol):
+    decomp = seasonal_decompose(df_all, period=round(24*365/4))
     dc_obs = decomp.observed
     dc_trend = decomp.trend
     dc_seas = decomp.seasonal
@@ -132,35 +202,34 @@ def plot_seasonal_decomposition(df_all, bedrooms):
     dc_df = pd.DataFrame({"observed": dc_obs, "trend": dc_trend,
                             "seasonal": dc_seas, "residual": dc_resid})
     start = dc_df.iloc[:, 0].index[0]
-    end = dc_df.iloc[:, 0].index[-1] + relativedelta(months=+15) + relativedelta(day=31)
+    # end = dc_df.iloc[:, 0].index[-1] + relativedelta(months=+15) + relativedelta(day=31)
+    end = dc_df.iloc[:, 0].index[-1] + relativedelta(weeks=+15)
 
     decomp_fig, axes = plt.subplots(4, 1, figsize=(12, 12))
     for i, ax in enumerate(axes):
         ax.plot(dc_df.iloc[:, i])
         ax.set_xlim(start, end)
-        ax.xaxis.set_major_locator(years)
-        ax.xaxis.set_major_formatter(years_fmt)
+        ax.xaxis.set_major_locator(months)
+        ax.xaxis.set_major_formatter(months_fmt)
         ax.set_ylabel(dc_df.iloc[:, i].name)
-        if i != 2:
-            ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+        # if i != 2:
+        #     ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
         plt.setp(ax.xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
 
     decomp_fig.suptitle(
-        f'Seasonal Decomposition of {bedrooms}-Bedroom Time Series of San Francisco Home Values (Mean)', fontsize=24)
+        f'Seasonal Decomposition of {symbol} Time Series', fontsize=24)
     decomp_fig.tight_layout()
     decomp_fig.subplots_adjust(top=0.94)
-    plt.savefig(f'images/{bedrooms}_bdrm_seasonal_decomp.png')
+    plt.savefig(f'{top}/images/{symbol}_seasonal_decomp.png')
 
-def train_test_split_housing(df_dict, split=84):
+def train_test_split_data(df, split=80):
     print(f'Using a {split}/{100-split} train-test split...')
-    cutoff = [round((split/100)*len(df)) for zipcode, df in df_dict.items()]
-    train_dict_list = [df_dict[i][:cutoff[count]] for count, i in enumerate(list(df_dict.keys()))]
-    train_dict = dict(zip(list(df_dict.keys()), train_dict_list))
-    test_dict_list = [df_dict[i][cutoff[count]:] for count, i in enumerate(list(df_dict.keys()))]
-    test_dict = dict(zip(list(df_dict.keys()), test_dict_list))
-    return train_dict, test_dict
+    cutoff = round((split/100)*len(df))
+    train_df = df[:cutoff]
+    test_df = df[cutoff:]
+    return train_df, test_df
 
-def gridsearch_SARIMAX(train_dict, seas = 12, p_min=2, p_max=2, q_min=0, q_max=0, d_min=1, d_max=1,
+def gridsearch_SARIMAX(train_df, seas = round(24*365/4), p_min=2, p_max=2, q_min=0, q_max=0, d_min=1, d_max=1,
                        s_p_min=2, s_p_max=2, s_q_min=0, s_q_max=0, s_d_min=1, s_d_max=1):
     p = range(p_min, p_max+1)
     q = range(q_min, q_max+1)
@@ -175,26 +244,24 @@ def gridsearch_SARIMAX(train_dict, seas = 12, p_min=2, p_max=2, q_min=0, q_max=0
         for s in seasonal_pdq:
             print('SARIMAX: {} x {}'.format(i, s))
 
-    zipcodes = []
     param_list = []
     param_seasonal_list = []
     aic_list = []
 
-    for zipcode, train in train_dict.items():
-        for param in pdq:
-            for param_seasonal in seasonal_pdq:
-                mod = SARIMAX(train,
-                              order=param,
-                              seasonal_order=param_seasonal,
-                              enforce_stationarity=False,
-                              enforce_invertibility=False)
-                zipcodes.append(zipcode[-5:])
-                param_list.append(param)
-                param_seasonal_list.append(param_seasonal)
-                aic = mod.fit().aic
-                aic_list.append(aic)
-                print(f'Zip code {zipcode}: {aic}')
-    return zipcodes, param_list, param_seasonal_list, aic_list
+    for param in pdq:
+        for param_seasonal in seasonal_pdq:
+            mod = SARIMAX(train_df,
+                          order=param,
+                          seasonal_order=param_seasonal,
+                          enforce_stationarity=False,
+                          enforce_invertibility=False).fit()
+            zipcodes.append(zipcode[-5:])
+            param_list.append(param)
+            param_seasonal_list.append(param_seasonal)
+            aic = mod.aic
+            aic_list.append(aic)
+            print(f'Zip code {zipcode}: {aic}')
+    return param_list, param_seasonal_list, aic_list
 
 def get_best_params(zipcodes, param_list, param_seasonal_list, aic_list, bedrooms):
     # intialize list of model params
