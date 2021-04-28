@@ -39,7 +39,7 @@ months = mdates.MonthLocator()
 months_fmt = mdates.DateFormatter('%B %Y')
 print('Functions loaded.')
 
-def get_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
+def get_av_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
     df = pd.DataFrame(columns=AV_COLUMNS)
     df.set_index('time', inplace=True)
     df.index = pd.to_datetime(df.index)
@@ -69,7 +69,7 @@ def get_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
     print(f'Finished getting all data slices for {symbol}') if verbose == 1 else None
     return df
 
-def get_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
+def get_av_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
     data_slice = f'year{y+1}month{m+1}'
     try:
         if verbose==1:
@@ -203,7 +203,7 @@ def plot_seasonal_decomposition(df_all, symbol, periods):
                             "seasonal": dc_seas, "residual": dc_resid})
     start = dc_df.iloc[:, 0].index[0]
     # end = dc_df.iloc[:, 0].index[-1] + relativedelta(months=+15) + relativedelta(day=31)
-    end = dc_df.iloc[:, 0].index[-1] + relativedelta(weeks=+15)
+    end = dc_df.iloc[:, 0].index[-1] + relativedelta(days=+15)
 
     decomp_fig, axes = plt.subplots(4, 1, figsize=(12, 12))
     for i, ax in enumerate(axes):
