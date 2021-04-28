@@ -193,8 +193,8 @@ def plot_acf_with_diff(df_all, bedrooms):
     acf_fig.subplots_adjust(top=0.9)
     plt.savefig(f'images/{bedrooms}_bdrm_PACF.png')
 
-def plot_seasonal_decomposition(df_all, symbol):
-    decomp = seasonal_decompose(df_all, period=round(24*365/4))
+def plot_seasonal_decomposition(df_all, symbol, periods):
+    decomp = seasonal_decompose(df_all, period=periods)
     dc_obs = decomp.observed
     dc_trend = decomp.trend
     dc_seas = decomp.seasonal
