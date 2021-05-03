@@ -11,6 +11,7 @@ import pickle as pkl
 import time
 import datetime
 from dateutil.relativedelta import relativedelta
+import pandas_market_calendars as mcal
 
 import pmdarima as pm
 from pmdarima import pipeline
@@ -48,9 +49,13 @@ print('Pmdarima_Model.py loaded.')
 from pathlib import Path
 top = Path(__file__ + '../../..').resolve()
 
+NYSE = mcal.get_calendar('NYSE')
+early = NYSE.schedule(start_date='2012-07-01', end_date='2012-07-10')
+cbd = pd.offsets.CustomBusinessDay(calendar=NYSE)
+
 class Pmdarima_Model:
     def __init__(self, endo, exog, endo_name, exog_name, train_size,
-                        n, period, freq, seas, impute=0, verbose=1,
+                        n, period, freq, seas, fit_seas=0, impute=0, verbose=1,
                         # max_d=2, max_p=2, max_q=2, max_D=2, max_P=2, max_Q=2,
                         date=1, fourier=0, box=0, log=0, gridsearch=0):
 
@@ -63,6 +68,7 @@ class Pmdarima_Model:
         except AssertionError:
             raise
 
+        self.length = endo.size
         self.dates = endo.index
         self.length = endo.index.size
         if impute==1:
@@ -81,12 +87,13 @@ class Pmdarima_Model:
         self.freq = freq
         self.f = freq.split()[0] + freq.split()[1][0].upper()
         self.seas = seas
+        self.fit_seas = fit_seas
         self.verbose = verbose
         self.date = date
         self.fourier = fourier
         self.box = box
         self.log = log
-        self.__reset_best_params()
+        self.__reset_best_params(en=True,ex=True)
         # if gridsearch==0:
         # self.endo_train, self.endo_test = train_test_split_data(self.endo, self.train_size, verbose=self.verbose)
         # self.exog_train, self.exog_test = train_test_split_data(self.exog, self.train_size, verbose=self.verbose)
@@ -96,33 +103,48 @@ class Pmdarima_Model:
         self.exog_train, self.exog_test = pm.model_selection.train_test_split(self.exog,
             train_size = self.train_size/100)
 
-        # self.gridsearch = gridsearch
-        kpss_diffs = ndiffs(self.endo_train, alpha=0.05, test='kpss', max_d=6)
-        adf_diffs = ndiffs(self.endo_train, alpha=0.05, test='adf', max_d=6)
+        # Calculate diffs to use
+        kpss_diffs = pm.arima.ndiffs(self.endo_train, alpha=0.05, test='kpss', max_d=6)
+        adf_diffs = pm.arima.ndiffs(self.endo_train, alpha=0.05, test='adf', max_d=6)
         self.n_diffs_en = max(adf_diffs, kpss_diffs)
 
-        kpss_diffs = ndiffs(self.exog_train, alpha=0.05, test='kpss', max_d=6)
-        adf_diffs = ndiffs(self.exog_train, alpha=0.05, test='adf', max_d=6)
-        self.n_diffs_ex = max(adf_diffs, kpss_diffs)
+        # kpss_diffs = pm.arima.ndiffs(self.exog_train, alpha=0.05, test='kpss', max_d=6)
+        # adf_diffs = pm.arima.ndiffs(self.exog_train, alpha=0.05, test='adf', max_d=6)
+        # self.n_diffs_ex = max(adf_diffs, kpss_diffs)
+        self.n_diffs_ex = 0
+
+        ocsb_diffs = pm.arima.nsdiffs(self.endo_train, m=261, test='ocsb', max_D=2)
+        ch_diffs = pm.arima.nsdiffs(self.endo_train, m=261, test='ch', max_D=2)
+        self.ns_diffs_en = max(ocsb_diffs, ch_diffs)
+
+        ocsb_diffs = pm.arima.nsdiffs(self.exog_train, m=261, test='ocsb', max_D=2)
+        ch_diffs = pm.arima.nsdiffs(self.exog_train, m=261, test='ch', max_D=2)
+        self.ns_diffs_ex = max(ocsb_diffs, ch_diffs)
         print('Successfully created instance of Class Pmdarima_Model.') if verbose==1 else None
 
-    def __reset_best_params(self):
-        self.endo_best_params = 'ARIMA Order()'
-        self.exog_best_params = 'ARIMA Order()'
-        if self.date == 1:
-            self.endo_best_params += ', DateFeaturizer'
-            self.exog_best_params += ', DateFeaturizer'
-        if self.fourier == 1:
-            self.endo_best_params += ', FourierFeaturizer'
-            self.exog_best_params += ', FourierFeaturizer'
-        if self.box == 1:
-            self.endo_best_params += ', BoxCoxEndogTransformer'
-            self.exog_best_params += ', BoxCoxEndogTransformer'
-        if self.log == 1:
-            self.endo_best_params += ', LogEndogTransformer'
-            self.exog_best_params += ', LogEndogTransformer'
-        self.endo_pipe = None
-        self.exog_pipe = None
+    def __reset_best_params(self, en=False, ex=False):
+        if en == True:
+            self.endo_best_params = 'ARIMA Order()'
+            if self.date == 1:
+                self.endo_best_params += ', DateFeaturizer'
+            if self.fourier == 1:
+                self.endo_best_params += ', FourierFeaturizer'
+            if self.box == 1:
+                self.endo_best_params += ', BoxCoxEndogTransformer'
+            if self.log == 1:
+                self.endo_best_params += ', LogEndogTransformer'
+            self.endo_pipe = None
+        if en == True:
+            self.exog_best_params = 'ARIMA Order()'
+            if self.date == 1:
+                self.exog_best_params += ', DateFeaturizer'
+            if self.fourier == 1:
+                self.exog_best_params += ', FourierFeaturizer'
+            if self.box == 1:
+                self.exog_best_params += ', BoxCoxEndogTransformer'
+            if self.log == 1:
+                self.exog_best_params += ', LogEndogTransformer'
+            self.exog_pipe = None
 
     def __fit_predict(self, endo, exog, endo_name, exog_name, train_size,
                             n, period, freq, seas, impute=1, verbose=1, extra=0,
@@ -134,51 +156,105 @@ class Pmdarima_Model:
 
         # dates =endo.index
 
-    def __run_stepwise_CV(self, model, y_train):
-        def forecast_one_step(model):
-            fc, conf_int = model.predict(n_periods=1, return_conf_int=True)
+    def __run_stepwise_CV(self, en_ex, dynamic=False):
+        def forecast_one_step(date_df):
+            fc, conf_int = model.predict(X=date_df, return_conf_int=True)
             return (
                 fc.tolist()[0],
                 np.asarray(conf_int).tolist()[0])
 
+        if en_ex == 'endo':
+            X_train, y_train, X_test, y_test = self.__split_df_dates(self.endo_train, self.endo_test)
+            model = self.endo_pipe
+        if en_ex == 'exog':
+            X_train, y_train, X_test, y_test = self.__split_df_dates(self.exog_train, self.exog_test)
+            model = self.exog_pipe
+
+        # date = pd.DataFrame([X_test.iloc[0].date], columns=['date'])
+        date_df = pd.DataFrame([X_test.iloc[0].date], index=[X_train.size], columns=['date'])
+        # date = X_test.iloc[0].date
         forecasts = []
         conf_ints = []
-
+        dynamic_str = ''
+        if dynamic == True:
+            dynamic_str = ' dynamically with forecasted values'
+        print(f'Iteratively making predictions on {en_ex.title()} Time Series and updating model{dynamic_str}, beginning with first index of y_test ...', end='')
         for new_ob in y_test:
-            fc, conf = forecast_one_step()
+            fc, conf = forecast_one_step(date_df)
             forecasts.append(fc)
             conf_ints.append(conf)
 
             # Updates the existing model with a small number of MLE steps
-            model.update(new_ob)
-            print(new_ob)
-
+            if dynamic == True:
+                model.update([fc], date_df)
+            elif dynamic == False:
+                model.update([new_ob], date_df)
+            print('.', end='')
+            # date = pd.DataFrame([X_test.iloc[0].date + cbd], index=[X_train.size]columns=['date'])
+            date_df.iloc[0].date += cbd
+            date_df.index += 1
+            # date += cbd
+        print(' Done.')
         # y_hat = pd.Series(forecasts, index=y_test.index)
         y_hat = forecasts
-        self.__calc_RMSE(y_test, y_hat, y_train)
-        print(f"SMAPE: {smape(y_test, forecasts)}%")
 
-        return
+        return X_train, y_train, X_test, y_test, y_hat, conf_ints
 
-    def __gridsearch_rmse(self, train, test, n_diffs):
+    def __gridsearch_rmse(self, train, test, n_diffs, max_order = 5):
+        rmse_list = []
+        order = 0
+        date_feat = pm.preprocessing.DateFeaturizer(
+        column_name="date",  # the name of the date feature in the X matrix
+        with_day_of_week=True,
+        with_day_of_month=True)
+        _, X_train_feats = date_feat.fit_transform(y_train, X_train)
         for d in range(n_diffs):
             for p in range(3):
                 for q in range(3):
+                    order = p+q
+                    if order > max_order:
+                        continue
                     print(f'Order = ({p}, {d}, {q}') if verbose==1 else None
+                    params = []
+                    params.append(('date', date_feat))
+                    for feats in range(4):
+                        if feats == 1:
 
 
-        return None
+
+                            params.append(('arima', pm.arima.AutoARIMA(d=n_diffs,
+                            trace=3,
+                            stepwise=True,
+                            suppress_warnings=True,
+                            seasonal=True,
+                            m=261
+                            # seasonal=False
+                            )))
+
+        return rmse_list
 
     def __run_manual_pipeline(self, train, test, n_diffs):
         pass
 
-    def __run_auto_pipeline(self, train, test, n_diffs, en_ex, return_conf_int):
-        pm.tsdisplay(train, lag_max=60)
-
+    def __split_df_dates(self, train, test):
         X_train = pd.DataFrame(train.index)
         y_train = train.values
-        X_test = pd.DataFrame(test.index)
+        X_test = pd.DataFrame(test.index, index=range(X_train.size, self.length))
         y_test = test.values
+        return X_train, y_train, X_test, y_test
+
+    def __run_auto_pipeline(self, en_ex, return_conf_int=False):
+
+        # X_train = pd.DataFrame(train.index)
+        # y_train = train.values
+        # X_test = pd.DataFrame(test.index)
+        # y_test = test.values
+        if en_ex == 'endo':
+            pm.tsdisplay(self.endo_train, lag_max=60, title = f'{en_ex.title()} Time Series Visualization')
+            X_train, y_train, X_test, y_test = self.__split_df_dates(self.endo_train, self.endo_test)
+        if en_ex == 'exog':
+            pm.tsdisplay(self.exog_train, lag_max=60, title = f'{en_ex.title()} Time Series Visualization')
+            X_train, y_train, X_test, y_test = self.__split_df_dates(self.exog_train, self.exog_test)
 
         params = []
         if self.date == 1:
@@ -197,13 +273,44 @@ class Pmdarima_Model:
             params.append(('box', pm.preprocessing.BoxCoxEndogTransformer()))
         if self.log == 1:
             print('Using LogEndogTransformer.') if self.verbose == 1 else None
-            params(('log', pm.preprocessing.LogEndogTransformer()))
-        params.append(('arima', pm.arima.AutoARIMA(d=n_diffs,
-                trace=3,
-                stepwise=True,
-                suppress_warnings=True,
-                seasonal=False
-                )))
+            params.append(('log', pm.preprocessing.LogEndogTransformer()))
+        arima_params = dict(#d=n_diffs,
+            trace=3,
+            maxiter=200,
+            stepwise=True,
+            suppress_warnings=True)
+        if en_ex == 'endo':
+            n_diffs = self.n_diffs_en
+            ns_diffs = self.ns_diffs_en
+        if en_ex == 'exog':
+            n_diffs = self.n_diffs_ex
+            ns_diffs = self.ns_diffs_ex
+        arima_params['d'] = n_diffs
+        if self.fit_seas == True:
+            arima_params['seasonal']=True
+            arima_params['m']=self.seas
+            arima_params['max_p']=0
+            arima_params['start_p']=0
+            arima_params['max_q']=0
+            arima_params['start_q']=0
+            arima_params['max_P']=0
+            arima_params['start_P']=0
+            arima_params['max_Q']=0
+            arima_params['start_Q']=0
+            arima_params['start_params']=np.asarray([0, 0, 0, 0, 0, 0, 0, 0, 1])
+            arima_params['D']=ns_diffs
+        elif self.fit_seas == False:
+            arima_params['seasonal']=False
+        params.append(('arima', pm.arima.AutoARIMA(**arima_params)))
+            # params.append(('arima', pm.arima.AutoARIMA(d=self.n_diffs,
+            #     trace=3,
+            #     maxiter=200,
+            #     stepwise=True,
+            #     suppress_warnings=True,
+            #     seasonal=True,
+            #     m=261,
+            #     # seasonal=False
+            #     )))
         print(f'Parameters for Pipeline: \n{params}\n') if self.verbose == 1 else None
         pipe = pipeline.Pipeline(params)
         # pipe = pipeline.Pipeline([
@@ -225,8 +332,10 @@ class Pmdarima_Model:
         best_arima = pipe.named_steps['arima'].model_
         if en_ex == 'endo':
             self.endo_best_params = self.endo_best_params.replace('()', str(best_arima.order))
+            self.endo_pipe = pipe
         elif en_ex == 'exog':
             self.exog_best_params = self.exog_best_params.replace('()', str(best_arima.order))
+            self.exog_pipe = pipe
 
         # run prediction
         conf_ints = []
@@ -236,7 +345,7 @@ class Pmdarima_Model:
             y_hat = pipe.predict(X=X_test)
         # print("Test RMSE: %.3f" % mse(y_test, y_hat, squared=False))
 
-        return X_train, y_train, X_test, y_test, y_hat, pipe, conf_ints
+        return X_train, y_train, X_test, y_test, y_hat, conf_ints
 
     def __plot_test_predict(self, X_train, y_train, X_test, y_test, y_hat, ylabel, auto=False):
 
@@ -269,8 +378,6 @@ class Pmdarima_Model:
         '''
         Plot Test vs Predict with optional confidence intervals
         '''
-        print(X_test)
-        print(type(X_test))
         ts = ylabel.replace(' ', '_')
         fig, ax = plt.subplots(figsize=(16, 8))
         ax.plot(X_train, y_train, color='blue', alpha=0.5, label='Training Data')
@@ -295,49 +402,74 @@ class Pmdarima_Model:
         else:
             plt.savefig(f'{top}/images/{ts}_{self.tf}_{self.f}_Test_vs_Predict_Conf.png')
 
-    def __calc_RMSE(self, y_test, y_hat, y_train):
+    def __get_model_scores(self, y_test, y_hat, y_train, en_ex):
+        try:
+            assert(en_ex in ('endo', 'exog')), "Endo/Exogenous switch not passed properly."
+        except AssertionError as e:
+            print(e)
+            print('Unable to get model AIC scores.')
+        else:
+            if en_ex == 'endo':
+                pipe = self.endo_pipe
+            elif en_ex == 'exog':
+                pipe = self.exog_pipe
+            print("Test AIC: %.2f" % (pipe.named_steps['arima'].model_.aic()))
         RMSE = mse(y_test, y_hat, squared=False)
-        print("Test RMSE: %.3f" % RMSE)
-        print("This is %.2f%% of the avg observed value.\n" % (100*RMSE/y_train.mean()))
+        print("Test RMSE: %.2f" % RMSE)
+        print("This is %.2f%% of the avg observed value." % (100*RMSE/y_train.mean()))
+        print("Test SMAPE: %.2f%%\n" % smape(y_test, y_hat))
 
-    def run_stepwise_cv(self):
-        print('Starting Step-Wise Cross-Validation Sequence...')
-        # X_train, y_train, X_test, y_test, y_hat = \
-        y_hat, conf_ints = self.__run_stepwise_CV(self.endo_train, self.endo_test, self.n_diffs_en)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.endo_name, en_ex='endo', auto=False)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.endo_name, en_ex='endo', auto=False, conf_ints=conf_ints)
+    def run_stepwise_cv(self, en=True, ex=True, dynamic=False, visualize=True):
+        print('Starting Step-Wise Cross-Validation...') if self.verbose == 1 else None
+        if en == True:
+            X_train, y_train, X_test, y_test, y_hat, conf_ints = self.__run_stepwise_CV(en_ex='endo', dynamic=dynamic)
+            self.__get_model_scores(y_test, y_hat, y_train, en_ex='endo')
+            if visualize == True:
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.endo_name, en_ex='endo', auto=False)
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.endo_name, en_ex='endo', auto=False, conf_ints=conf_ints)
+        if ex == True:
+            X_train, y_train, X_test, y_test, y_hat, conf_ints = self.__run_stepwise_CV(en_ex='exog', dynamic=dynamic)
+            self.__get_model_scores(y_test, y_hat, y_train, en_ex='exog')
+            if visualize == True:
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.exog_name, en_ex='exog', auto=False)
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.exog_name, en_ex='exog', auto=False, conf_ints=conf_ints)
 
-        # X_train, y_train, X_test, y_test, y_hat = \
-        y_hat, conf_ints = self.__run_stepwise_CV(self.exog_train, self.exog_test, self.n_diffs_ex)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.exog_name, en_ex='exog', auto=False)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.exog_name, en_ex='exog', auto=False, conf_ints=conf_ints)
+    def run_auto_pipeline(self, en=True, ex=True, visualize=True):
+        if en == True:
+            if self.verbose == 1:
+                print('Starting AutoARIMA...')
+                print(f'Endogenous data set diffs to use: {self.n_diffs_en}')
+                if self.fit_seas == True:
+                    print(f'Endogenous data set seasonal diffs to use: {self.ns_diffs_en}')
+            self.__reset_best_params(en=True)
+            X_train, y_train, X_test, y_test, y_hat, conf_ints = \
+                self.__run_auto_pipeline(en_ex='endo', return_conf_int=True)
+            self.__get_model_scores(y_test, y_hat, y_train, en_ex='endo')
+            if visualize == True:
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.endo_name, en_ex='endo', auto=True)
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.endo_name, en_ex='endo', auto=True, conf_ints=conf_ints)
+        if ex == True:
+            if self.verbose == 1:
+                print('Starting AutoARIMA...')
+                print(f'Exogenous data set diffs to use:  {self.n_diffs_ex}')
+                if self.fit_seas == True:
+                    print(f'Exogenous data set seasonal diffs to use: {self.ns_diffs_ex}')
+            self.__reset_best_params(ex=True)
+            X_train, y_train, X_test, y_test, y_hat, conf_ints = \
+                self.__run_auto_pipeline(en_ex='exog', return_conf_int=True)
+            self.__get_model_scores(y_test, y_hat, y_train, en_ex='exog')
+            if visualize == True:
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.exog_name, en_ex='exog', auto=True)
+                self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
+                        ylabel=self.exog_name, en_ex='exog', auto=True, conf_ints=conf_ints)
 
-    def run_auto(self):
-        if self.verbose == 1:
-            print('Starting AutoARIMA sequence...')
-            print(f'Endogenous data set diffs to use: {self.n_diffs_en}')
-            print(f'Exogenous data set diffs to use:  {self.n_diffs_ex}')
-        self.__reset_best_params()
-        X_train, y_train, X_test, y_test, y_hat, conf_ints, self.endo_pipe = \
-            self.__run_auto_pipeline(self.endo_train, self.endo_test, self.n_diffs_en, en_ex='endo', return_conf_int=True)
-        self.__calc_RMSE(y_test, y_hat, y_train)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.endo_name, en_ex='endo', auto=True)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.endo_name, en_ex='endo', auto=True, conf_ints=conf_ints)
-
-        X_train, y_train, X_test, y_test, y_hat, conf_ints, self.exog_pipe = \
-            self.__run_auto_pipeline(self.exog_train, self.exog_test, self.n_diffs_ex, en_ex='exog', return_conf_int=True)
-        self.__calc_RMSE(y_test, y_hat, y_train)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.exog_name, en_ex='exog', auto=True)
-        self.__plot_test_predict_conf(X_train, y_train, X_test, y_test, y_hat,
-                ylabel=self.exog_name, en_ex='exog', auto=True, conf_ints=conf_ints)
-
-        return pipe
+        return self.endo_pipe, self.exog_pipe
         # return endo_train, endo_test, exog_train, exog_test
         # return X_train, X_test, exog_train, exog_test
