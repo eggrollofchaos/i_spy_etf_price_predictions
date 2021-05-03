@@ -2,12 +2,18 @@ from random import random
 import pandas as pd
 import matplotlib
 import numpy as np
-import time
 import csv
-from sklearn import metrics
-
 import itertools
+import pickle as pkl
+
+import time
+import datetime
 from dateutil.relativedelta import relativedelta
+
+import pmdarima as pm
+from pmdarima import pipeline
+import prophet
+from sklearn.metrics import mean_squared_error as mse
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -17,9 +23,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib import ticker
 import matplotlib.dates as mdates
+import matplotlib.units as munits
 from matplotlib.dates import DateFormatter
-plt.style.use('ggplot')
+from matplotlib.ticker import FuncFormatter
+# plt.style.use('ggplot')
 sns.set_theme(style="darkgrid")
+converter = mdates.ConciseDateConverter()
+munits.registry[np.datetime64] = converter
+munits.registry[datetime.date] = converter
+munits.registry[datetime.datetime] = converter
 
 font = {'size'   : 12}
 matplotlib.rc('font', **font)
@@ -29,26 +41,67 @@ pd.set_option('display.max_rows',25)
 
 from pathlib import Path
 top = Path(__file__ + '../../..').resolve()
-# columns for alphaVantage output
+# columns for Alpha Vantage output
 AV_COLUMNS = ['time', 'open', 'high', 'low', 'close', 'volume']
+
+# custom formatter
+
+class CustomFormatter(FuncFormatter):
+    def __init__(self, dates, fmt='%Y-%m-%d'):
+        self.dates = dates
+        self.fmt = fmt
+
+    def __call__(self, x, pos=0):
+        'Return the label for time x at position pos'
+        ind = int(np.round(x))
+        if ind >= len(self.dates) or ind < 0:
+            return ''
+
+        return num2date(self.dates[ind]).strftime(self.fmt)
+
+
+# def format_date(x, N, pos=None):
+#     thisind = np.clip(int(x + 0.5), 0, N-1)
+#     return df.index[thisind].strftime('%Y-%m-%d')
 
 # displaying years / months in figures
 years = mdates.YearLocator()
 years_fmt = mdates.DateFormatter('%Y')
 months = mdates.MonthLocator()
 months_fmt = mdates.DateFormatter('%B %Y')
+days = mdates.DayLocator()
+days_fmt = mdates.DateFormatter('%B %d, %Y')
+hours = mdates.HourLocator()
+hours_fmt = mdates.DateFormatter('%B %d, %Y %H:00')
 print('Functions loaded.')
 
-def get_av_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
+################################################################################
+
+def get_av_all_data_slices(symbol, ts, y=2, m=12, interval = '60min', verbose=0):
+    '''
+    Takes in a symbol, alpha_vantage TimeSeries object, and calls get_av_next_data_slice
+    iteratively until all slices are returned.
+    symbol : str
+    ts : alpha_vantage TimeSeries object
+        e.g. ts = alpha_vantage.timeseries.TimeSeries(key=av_key, output_format='csv')
+    y : int, optional (default = 2)
+        total historical years to return [1,2]
+    m : int, optional (default = 12)
+        total historical months per year to return [1,12]
+    interval : str, optional (default '15min')
+        time interval between two conscutive values,
+        supported values are '1min', '5min', '15min', '30min', '60min'
+    verbose : int, optional (default = 0)
+        verbose output [0,1]
+    '''
     df = pd.DataFrame(columns=AV_COLUMNS)
     df.set_index('time', inplace=True)
     df.index = pd.to_datetime(df.index)
-    print(f'Requesting all data slices for {symbol}...\n')
+    print(f'Requesting historical intraday price data slices for {symbol}...\n')
     for y in range(y):
         for m in range(m):
-            print(y,m)
             try:
-                fieldnames, data_reader, data_slice, tries = get_next_data_slice(symbol, ts, y, m, 0, verbose)
+                fieldnames, data_reader, data_slice, tries = get_av_next_data_slice(symbol, ts, y, m, interval, 0, verbose)
             except TypeError:
                 print('Error in get_intraday_extended function call.') if verbose == 1 else None
                 raise
@@ -56,7 +109,13 @@ def get_av_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
                 print("Error in running get_next_data_slice function:", sys.exc_info()[0]) if verbose == 1 else None
                 raise
             else:
+                print("GET_INTRADAY_EXTENDED ran with no errors.") if verbose == 1 else None
+            try:
                 df_month = pd.DataFrame(data_reader, columns=fieldnames)
+                assert(len(df_month)>0), f"Returned dataset is empty, please check Alpha Vantage params."
+            except AssertionError:
+                raise
+            else:
                 df_month.set_index('time', inplace=True)
                 df_month.index = pd.to_datetime(df_month.index)
                 if verbose == 1:
@@ -66,10 +125,10 @@ def get_av_all_data_slices(symbol, ts, y=2, m=12, verbose=0):
                     print(df_month.tail(1))
                 df = df.append(df_month)
                 print(f"Processed and appended {data_slice} to DataFrame.\n") if verbose == 1 else None
-    print(f'Finished getting all data slices for {symbol}') if verbose == 1 else None
+    print(f'Finished getting all data slices for {symbol}')
     return df
 
-def get_av_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
+def get_av_next_data_slice(symbol, ts, y, m, interval = '60min', tries=0, verbose=0):
     data_slice = f'year{y+1}month{m+1}'
     try:
         if verbose==1:
@@ -77,7 +136,7 @@ def get_av_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
                 print(f'Re-requesting slice: {data_slice}')
             else:
                 print(f'Requesting slice: {data_slice}')
-        data_reader, meta_data = ts.get_intraday_extended(symbol=symbol, interval='60min', slice=data_slice)
+        data_reader, meta_data = ts.get_intraday_extended(symbol=symbol, interval=interval, slice=data_slice)
     except TypeError:
         raise
     else:
@@ -85,8 +144,7 @@ def get_av_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
             fieldnames = next(data_reader)
 #             print(fieldnames)
             assert(len(fieldnames) == 6), f"Error: Header row length is {len(fieldnames)}, expected 6."
-#             assert(fieldnames[0]==AV_COLUMNS[0]), f"DateTime index missing from AlphaVantage output."
-            assert(fieldnames==AV_COLUMNS), f"Columns mismatch from AlphaVantage output."
+            assert(fieldnames==AV_COLUMNS), f"Columns mismatch from Alpha Vantage output."
         except AssertionError as e:
             sleep_time = 10 + tries + tries*random()
             if verbose == 1:
@@ -94,41 +152,29 @@ def get_av_next_data_slice(symbol, ts, y, m, tries=0, verbose=0):
                 print(f'Sleeping for {sleep_time}...')
             time.sleep(sleep_time)
             tries+=1
-            fieldnames, data_reader, data_slice, tries = get_next_data_slice(symbol, ts, y, m, tries=tries, verbose=verbose)
+            fieldnames, data_reader, data_slice, tries = get_av_next_data_slice(symbol, ts, y, m, interval, tries=tries, verbose=verbose)
     return fieldnames, data_reader, data_slice, tries
 
+# def visualize_data(df):
+#     pass
 
-
-def melt_data(df):
-    '''
-    Takes in a Zillow Housing Data File (ZHVI) as a DataFrame in wide format
-    and returns a melted DataFrame
-    '''
-    melted = pd.melt(df, id_vars=['RegionID', 'RegionName', 'City', 'State', 'StateName', 'Metro', 'CountyName', 'SizeRank', 'RegionType'], var_name='date')
-    melted['date'] = pd.to_datetime(melted['date'], infer_datetime_format=True)
-    melted = melted.dropna(subset=['value'])
-    return melted
-
-def visualize_data(df):
-    pass
-
-def create_df_dict(df):
-    zipcodes = list(set(df.zipcode))
-    keys = [zipcode for zipcode in map(str,zipcodes)]
-    data_list = []
-
-    for key in keys:
-        new_df = df[df.zipcode == int(key)]
-        new_df.drop('zipcode', inplace=True, axis=1)
-        new_df.columns = ['date', 'value']
-        new_df.date = pd.to_datetime(new_df.date)
-        new_df.set_index('date', inplace=True)
-        new_df = new_df.asfreq('M')
-        data_list.append(new_df)
-
-    df_dict = dict(zip(keys, data_list))
-
-    return df_dict
+# def create_df_dict(df):
+#     zipcodes = list(set(df.zipcode))
+#     keys = [zipcode for zipcode in map(str,zipcodes)]
+#     data_list = []
+#
+#     for key in keys:
+#         new_df = df[df.zipcode == int(key)]
+#         new_df.drop('zipcode', inplace=True, axis=1)
+#         new_df.columns = ['date', 'value']
+#         new_df.date = pd.to_datetime(new_df.date)
+#         new_df.set_index('date', inplace=True)
+#         new_df = new_df.asfreq('M')
+#         data_list.append(new_df)
+#
+#     df_dict = dict(zip(keys, data_list))
+#
+#     return df_dict
 
 def test_stationarity(df_all, diffs=0):
     if diffs == 2:
@@ -144,57 +190,52 @@ def test_stationarity(df_all, diffs=0):
         dfoutput['Critical Value (%s)' %key] = value
     print (dfoutput)
 
-def test_stationarity_all_zips(df_dict, diffs=0):
-    for zipcode, df in df_dict.items():
-        if diffs == 2:
-            dftest = adfuller(df.diff().diff().dropna())
-        elif diffs == 1:
-            dftest = adfuller(df.diff().dropna())
-        else:
-            dftest = adfuller(df)
-        dfoutput = pd.Series(dftest[0:4], index=['Test Statistic',
-                                             'p-value', '#Lags Used',
-                                             'Number of Observations Used'])
-        for key, value in dftest[4].items():
-            dfoutput['Critical Value (%s)' %key] = value
-        print(dfoutput[1])
-
-def plot_pacf_with_diff(df_all, bedrooms):
-    pacf_fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    pacf_fig.suptitle(f'Partial Autocorrelations of {bedrooms}-Bedroom Time Series for Entire San Francisco Data Set', fontsize=18)
-    plot_pacf(df_all, ax=ax[0])
+def plot_pacf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
+    timeframe = f'{n} {period.title()}'
+    pacf_fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    pacf_fig.suptitle(f'Partial Autocorrelations of {symbol} Time Series: {timeframe}, Frequency = {freq}', fontsize=18)
+    plot_pacf(df, ax=ax[0], lags=lags, alpha=alpha)
     ax[0].set_title('Undifferenced PACF', size=14)
     ax[0].set_xlabel('Lags', size=14)
     ax[0].set_ylabel('PACF', size=14)
-    plot_pacf(df_all.diff().dropna(), ax=ax[1])
+    plot_pacf(df.diff().dropna(), ax=ax[1], lags=lags, alpha=alpha)
     ax[1].set_title('Differenced PACF', size=14)
     ax[1].set_xlabel('Lags', size=14)
     ax[1].set_ylabel('PACF', size=14)
+    plot_pacf(df.diff().diff().dropna(), ax=ax[2], lags=lags, alpha=alpha)
+    ax[2].set_title('Twice-Differenced PACF', size=14)
+    ax[2].set_xlabel('Lags', size=14)
+    ax[2].set_ylabel('ACF', size=14)
     pacf_fig.tight_layout()
     pacf_fig.subplots_adjust(top=0.9)
-    plt.savefig(f'images/{bedrooms}_bdrm_PACF.png')
+    plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_PACF.png')
 
-def plot_acf_with_diff(df_all, bedrooms):
+def plot_acf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
+    timeframe = f'{n} {period.title()}'
     acf_fig, ax = plt.subplots(1, 3, figsize=(18, 6))
-    acf_fig.suptitle(f'Autocorrelations of {bedrooms}-Bedroom Time Series for Entire San Francisco Data Set', fontsize=18)
-    plot_acf(df_all, ax=ax[0])
+    acf_fig.suptitle(f'Autocorrelations of {symbol} Time Series: {timeframe}, Frequency = {freq}', fontsize=18)
+    plot_acf(df, ax=ax[0], lags=lags, alpha=alpha)
     ax[0].set_title('Undifferenced ACF', size=14)
     ax[0].set_xlabel('Lags', size=14)
     ax[0].set_ylabel('ACF', size=14)
-    plot_acf(df_all.diff().dropna(), ax=ax[1])
+    plot_acf(df.diff().dropna(), ax=ax[1], lags=lags, alpha=alpha)
     ax[1].set_title('Once-Differenced ACF', size=14)
     ax[1].set_xlabel('Lags', size=14)
     ax[1].set_ylabel('ACF', size=14)
-    plot_acf(df_all.diff().diff().dropna(), ax=ax[2])
+    plot_acf(df.diff().diff().dropna(), ax=ax[2], lags=lags, alpha=alpha)
     ax[2].set_title('Twice-Differenced ACF', size=14)
     ax[2].set_xlabel('Lags', size=14)
     ax[2].set_ylabel('ACF', size=14)
     acf_fig.tight_layout()
     acf_fig.subplots_adjust(top=0.9)
-    plt.savefig(f'images/{bedrooms}_bdrm_PACF.png')
+    plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_ACF.png')
 
-def plot_seasonal_decomposition(df_all, symbol, periods):
-    decomp = seasonal_decompose(df_all, period=periods)
+def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
+    timeframe = f'{n} {period.title()}'
+    delta_freq = freq.split()[1].lower() + 's'
+    delta = {}
+    delta[delta_freq] = 15
+    decomp = seasonal_decompose(df, period=seas)
     dc_obs = decomp.observed
     dc_trend = decomp.trend
     dc_seas = decomp.seasonal
@@ -203,28 +244,45 @@ def plot_seasonal_decomposition(df_all, symbol, periods):
                             "seasonal": dc_seas, "residual": dc_resid})
     start = dc_df.iloc[:, 0].index[0]
     # end = dc_df.iloc[:, 0].index[-1] + relativedelta(months=+15) + relativedelta(day=31)
-    end = dc_df.iloc[:, 0].index[-1] + relativedelta(days=+15)
+    try:
+        end = dc_df.iloc[:, 0].index[-1] + relativedelta(**delta)
+    except:
+        print("Error in relativedelta function call, please check params.")
+        raise
+    # formatter = FuncFormatter(format_date)
 
     decomp_fig, axes = plt.subplots(4, 1, figsize=(12, 12))
     for i, ax in enumerate(axes):
+        # print(dc_df.iloc[:,i].dropna())
         ax.plot(dc_df.iloc[:, i])
+        # ax.plot(range(dc_df.iloc[:,i].dropna().size), dc_df.iloc[:,i].dropna())
+        # ax.set_xticklabels(dc_df.dropna().index.date.tolist())
+        # ax.set_xticklabels(dc_df.iloc[:,i].dropna().index.date.tolist());
+        # decomp_fig.autofmt_xdate()
+        # ax.set_xlim(lims[i])
         ax.set_xlim(start, end)
-        ax.xaxis.set_major_locator(months)
-        ax.xaxis.set_major_formatter(months_fmt)
+        # ax.set_xlim(0, (dc_df.iloc[:,i].dropna().size)+15)
+        # ax.xaxis.set_major_locator(months)
+        # ax.xaxis.set_major_formatter(months_fmt)
+        # formatter = CustomFormatter(df)
+        # ax.xaxis.set_major_formatter(formatter)
         ax.set_ylabel(dc_df.iloc[:, i].name)
         # if i != 2:
         #     ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
         plt.setp(ax.xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
 
     decomp_fig.suptitle(
-        f'Seasonal Decomposition of {symbol} Time Series', fontsize=24)
+        f'Seasonal Decomposition of {symbol} Time Series: {timeframe}, Frequency = {freq}', fontsize=24)
     decomp_fig.tight_layout()
     decomp_fig.subplots_adjust(top=0.94)
-    plt.savefig(f'{top}/images/{symbol}_seasonal_decomp.png')
+    plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_seasonal_decomp.png')
 
-def train_test_split_data(df, split=80):
-    print(f'Using a {split}/{100-split} train-test split...')
-    cutoff = round((split/100)*len(df))
+
+def train_test_split_data(df, train_size=80, verbose=0):
+    if verbose==1:
+        print('##### Train-Test Split #####')
+        print(f'Using a {train_size}/{100-train_size} train-test split...')
+    cutoff = round((train_size/100)*len(df))
     train_df = df[:cutoff]
     test_df = df[cutoff:]
     return train_df, test_df
@@ -390,7 +448,7 @@ def plot_train_test(test_dict, predictions_dict, model_best_df, bedrooms):
         ax.set_title(
             f'{bedrooms}-Bedroom San Francisco {zipcode} Home Values: Test vs Predictions\nusing SARIMAX{model_best_df.loc[zipcode].param}x{model_best_df.loc[zipcode].param_seasonal}')
         plt.legend()
-        plt.savefig(f'images/{bedrooms}_bdrm_test_predict{zipcode}.png')
+        plt.savefig(f'{top}/images/{bedrooms}_bdrm_test_predict{zipcode}.png')
 
 def plot_RMSE(RMSE_df, bedrooms):
     fig, ax = plt.subplots(figsize = (12,8))
@@ -405,7 +463,7 @@ def plot_RMSE(RMSE_df, bedrooms):
     ax.set_title(f'{bedrooms}-Bedroom San Francisco Home Values: Test Prediction RMSE', size = 24)
     plt.setp(ax.xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
     fig.legend(bbox_to_anchor = (0.85, 0.86))
-    plt.savefig(f'images/{bedrooms}_bdrm_RMSE.png')
+    plt.savefig(f'{top}/images/{bedrooms}_bdrm_RMSE.png')
 
 def run_forecast(df_dict, model_best_df):
     forecast_dict = {}
@@ -427,7 +485,7 @@ def run_forecast(df_dict, model_best_df):
         ax.set_title(
             f'1-Bedroom San Francisco {zipcode} Home Values: 1 Year Forecast\nusing SARIMAX{model_best_df.loc[zipcode].param}x{model_best_df.loc[zipcode].param_seasonal}')
         plt.legend()
-        plt.savefig(f'images/1_bdrm_forecast_{zipcode}.png')
+        plt.savefig(f'{top}/images/1_bdrm_forecast_{zipcode}.png')
     return forecast_dict
 
 def create_final_df(df_dict, forecast_dict, bedrooms):
@@ -457,7 +515,7 @@ def visualize_forecasts(df, forecast_df, bedrooms):
     ax.set_yticks(np.linspace(1e5,1.5e6,15))
     ax.set_ylim((1e5, 1.5e6))
     ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-    plt.savefig(f'images/{bedrooms}_bdrm_home_values_forecast.png')
+    plt.savefig(f'{top}/images/{bedrooms}_bdrm_home_values_forecast.png')
 
 def visualize_results(df1, df2):
     fig, ax = plt.subplots(2, 1, figsize = (12,16))
@@ -473,7 +531,7 @@ def visualize_results(df1, df2):
     plt.setp(ax[0].xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
     plt.setp(ax[1].xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
     fig.tight_layout(pad=2.0)
-    plt.savefig(f'images/final_forecasts.png')
+    plt.savefig(f'{top}/images/final_forecasts.png')
 
 def best_3_zipcodes(sorted_df, bedrooms):
     print(f'The zipcodes with the greatest projected growth in mid-tier {bedrooms}-bedroom home values are:\n{sorted_df.iloc[-3]}\n {sorted_df.iloc[-2]}\n {sorted_df.iloc[-1]}')
