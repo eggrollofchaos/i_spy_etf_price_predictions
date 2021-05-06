@@ -608,7 +608,7 @@ class Pmdarima_Model:
             print("AIC: %.3f | RMSE: %.3f | SMAPE %.3f%%%" % (AIC, RMSE, SMAPE))
         return AIC, RMSE, SMAPE
 
-    def run_stepwise_CV(self, model=None, func=None, dynamic=False, verbose=1, visualize=True, conf_ints=True):
+    def run_stepwise_CV(self, model=None, func=None, dynamic=False, verbose=1, visualize=True, return_conf_ints=True):
         model_str = ''
         if not model:
             model = self.AA_mod_pipe
@@ -621,10 +621,10 @@ class Pmdarima_Model:
         AIC, RMSE, SMAPE = self.__get_model_scores(y_test, y_hat, y_train, model=model, verbose=verbose)
         if visualize:
             # self.plot_test_predict(y_hat, ylabel=self.data_name, func=func)
-            self.plot_test_predict(y_hat, conf_ints=conf_ints, ylabel=self.data_name, func=func)
+            self.plot_test_predict(y_hat, conf_ints=return_conf_ints, ylabel=self.data_name, func=func)
         return AIC, RMSE, SMAPE
 
-    def run_auto_pipeline(self, show_summary=False, verbose=1, visualize=True, conf_ints=True):
+    def run_auto_pipeline(self, show_summary=False, verbose=1, visualize=True, return_conf_ints=True):
         if verbose:
             print('Starting AutoARIMA...')
             print(f'Data set diffs to use: {self.n_diffs}')
@@ -636,7 +636,7 @@ class Pmdarima_Model:
         self.__get_model_scores(y_test, y_hat, y_train, model=self.AA_mod_pipe, verbose=verbose)
         if visualize:
             # self.plot_test_predict(y_hat, ylabel=self.data_name, func='AA')
-            self.plot_test_predict(y_hat, conf_ints=conf_ints, ylabel=self.data_name, func='AA')
+            self.plot_test_predict(y_hat, conf_ints=return_conf_ints, ylabel=self.data_name, func='AA')
 
         return self.AA_mod_pipe
         # return df_train, df_test, exog_train, exog_test
@@ -644,7 +644,7 @@ class Pmdarima_Model:
 
     def run_gridsearch_CV(self, max_order=6, t_list=['n','c','t','ct'], no_intercept=False,
                             date=True, fourier=True, box=False, log=False, visualize=True,
-                            conf_ints=True, verbose=1, debug=False, parallel=True):
+                            return_conf_ints=True, verbose=1, debug=False, parallel=True):
         if verbose:
             print('Starting GridSearchCV...')
         self.GS_best_params, self.GS_best_mod_pipe = self.__reset_mod_params()
@@ -653,7 +653,7 @@ class Pmdarima_Model:
             verbose=verbose, debug=debug, parallel=parallel)
         if visualize:
             # self.plot_test_predict(self.y_hat, conf_ints=conf_ints, ylabel=self.data_name, func='GS')
-            self.plot_test_predict(self.y_hat, conf_ints=conf_ints, ylabel=self.data_name, func='GS')
+            self.plot_test_predict(self.y_hat, conf_ints=return_conf_ints, ylabel=self.data_name, func='GS')
         return best_model, scores
 
     def __fit_predict(self, model, days_fc, new_dates, index_fc, hist_dates_df, en_ex, new_dates_df=None, exog_df=None, verbose=1):
