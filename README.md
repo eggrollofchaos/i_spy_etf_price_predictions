@@ -13,7 +13,7 @@ Our primary SPY time series data comes the [yfinance API](https://github.com/ran
 
 ### Historical Data  
 The SPY ETF, since it tracks the S&P 500 Index, show positive growth over time, and has tripled in price in the last 10 years. There is also some cyclical and seasonality present.  
-
+ 
 ### Target Variable  
 We will forecast SPY closing price up to 15 trading days into the future, ending on a Friday.
 ![SPY Chart](images/SPY_Chart.png)  
