@@ -3,7 +3,7 @@
 ## Overview  
 In this project, we examine and perform time series analysis on the [SPDR® S&P 500® ETF Trust](https://www.ssga.com/us/en/institutional/etfs/funds/spdr-sp-500-etf-trust-spy) to forecast future prices and inform trading decisions.  
 
-![finance](images/finane.jpeg)  
+![finance](images/finance.jpeg)  
   
 ## Motivation  
 While institutional investors leverage enterprise-grade data feeds and models to plan execute trades in the sub-second time-frame, amateur investors are limited primarily to free data and tools and make investment decisions. The goal is to take freely available public data and, leveraging machine learning modalities to predict the movement of financial instruments to help the little guy get on the right side of the trade, more often than not. The tick 'SPY' (aka "Spiders") was chosen because it is well established, highly liquid, and popular.
