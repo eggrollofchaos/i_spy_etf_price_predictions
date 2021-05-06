@@ -1,3 +1,4 @@
+import os
 from random import random
 import pandas as pd
 import matplotlib
@@ -18,6 +19,12 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+
+from sklearn.metrics import confusion_matrix, plot_confusion_matrix,\
+    precision_score, recall_score, accuracy_score, f1_score, log_loss,\
+    roc_curve, roc_auc_score, classification_report, plot_roc_curve
+from sklearn.model_selection import train_test_split, GridSearchCV,\
+    cross_val_score, RandomizedSearchCV, StratifiedKFold
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -43,7 +50,7 @@ from pathlib import Path
 top = Path(__file__ + '../../..').resolve()
 # columns for Alpha Vantage output
 AV_COLUMNS = ['time', 'open', 'high', 'low', 'close', 'volume']
-
+YF_COLUMNS = ['open', 'high', 'low', 'close', 'adj_close', 'volume']
 # custom formatter
 
 class CustomFormatter(FuncFormatter):
@@ -73,9 +80,50 @@ days = mdates.DayLocator()
 days_fmt = mdates.DateFormatter('%B %d, %Y')
 hours = mdates.HourLocator()
 hours_fmt = mdates.DateFormatter('%B %d, %Y %H:00')
-print('Functions loaded.')
+print(f'Functions loaded from {top}/data.')
 
 ################################################################################
+
+def clear():
+    os.system( 'cls' )
+
+def round_sig_figs(x, p):
+    x=np.asarray(x)
+    x_positive = np.where(np.isfinite(x) & (x != 0), np.abs(x), 10**(p-1))
+    mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
+    return np.round(x * mags) / mags
+
+def get_yf_time_series(yf, years, ticker, freq):
+    for year in years:
+        start_year = pd.Timestamp.today().year - year
+        start_date = pd.to_datetime(f'{start_year}-05-01')
+        start_file = start_date.date() if freq.is_on_offset(start_date) else (start_date+freq).date()
+        if pd.Timestamp.now() > (pd.Timestamp.today().date() + pd.offsets.Hour(16)):
+            end_date = pd.Timestamp.today()
+        else:
+            end_date = pd.Timestamp.today().date() - pd.offsets.Hour(4)
+        end_file = end_date.date()
+
+        df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+        df.index = df.index.rename('date')
+        df.columns = YF_COLUMNS
+        df.to_csv(f'{top}/data/{ticker}_{year}Y_CBD_{start_file}_{end_file}.csv')
+
+def load_yf_time_series(yf, year, ticker, freq):
+    start_year = pd.Timestamp.today().year - year
+    start_date = pd.to_datetime(f'{start_year}-05-01')
+    start_file = start_date.date() if freq.is_on_offset(start_date) else (start_date+freq).date()
+
+    if pd.Timestamp.now() > (pd.Timestamp.today().date() + pd.offsets.Hour(16)):
+        end_date = pd.Timestamp.today()
+    else:
+        end_date = pd.Timestamp.today().date() - freq + pd.offsets.Hour(16)
+    end_file = end_date.date()
+
+    df = pd.read_csv(f'../data/{ticker}_{year}Y_CBD_{start_file}_{end_file}.csv', index_col='date')
+    df.index = pd.to_datetime(df.index)
+
+    return df
 
 def get_av_all_data_slices(symbol, ts, y=2, m=12, interval = '60min', verbose=0):
     '''
@@ -155,26 +203,27 @@ def get_av_next_data_slice(symbol, ts, y, m, interval = '60min', tries=0, verbos
             fieldnames, data_reader, data_slice, tries = get_av_next_data_slice(symbol, ts, y, m, interval, tries=tries, verbose=verbose)
     return fieldnames, data_reader, data_slice, tries
 
-# def visualize_data(df):
-#     pass
+def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
+    """
+    Sets all relevant parameters for an equidistant date-x-axis.
+    Tick Locators are not affected (set automatically)
 
-# def create_df_dict(df):
-#     zipcodes = list(set(df.zipcode))
-#     keys = [zipcode for zipcode in map(str,zipcodes)]
-#     data_list = []
-#
-#     for key in keys:
-#         new_df = df[df.zipcode == int(key)]
-#         new_df.drop('zipcode', inplace=True, axis=1)
-#         new_df.columns = ['date', 'value']
-#         new_df.date = pd.to_datetime(new_df.date)
-#         new_df.set_index('date', inplace=True)
-#         new_df = new_df.asfreq('M')
-#         data_list.append(new_df)
-#
-#     df_dict = dict(zip(keys, data_list))
-#
-#     return df_dict
+    Args:
+        fig: pyplot.figure instance
+        ax: pyplot.axis instance (target axis)
+        dates: iterable of datetime.date or datetime.datetime instances
+        fmt: Display format of dates
+        label: x-axis label
+    Returns:
+        None
+    """
+    N = len(dates)
+    def format_date(index, pos):
+        index = np.clip(int(index + 0.5), 0, N - 1)
+        return dates[index].strftime(fmt)
+    ax.xaxis.set_major_formatter(FuncFormatter(format_date))
+    ax.set_xlabel(label, size = 18)
+    fig.autofmt_xdate()
 
 def test_stationarity(df_all, diffs=0):
     if diffs == 2:
@@ -240,8 +289,8 @@ def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
     dc_trend = decomp.trend
     dc_seas = decomp.seasonal
     dc_resid = decomp.resid
-    dc_df = pd.DataFrame({"observed": dc_obs, "trend": dc_trend,
-                            "seasonal": dc_seas, "residual": dc_resid})
+    dc_df = pd.DataFrame({"Observed": dc_obs, "Trend": dc_trend,
+                            "Seasonal": dc_seas, "Residual": dc_resid})
     start = dc_df.iloc[:, 0].index[0]
     # end = dc_df.iloc[:, 0].index[-1] + relativedelta(months=+15) + relativedelta(day=31)
     try:
@@ -266,15 +315,15 @@ def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
         # ax.xaxis.set_major_formatter(months_fmt)
         # formatter = CustomFormatter(df)
         # ax.xaxis.set_major_formatter(formatter)
-        ax.set_ylabel(dc_df.iloc[:, i].name)
+        ax.set_ylabel(dc_df.iloc[:, i].name, size=20)
         # if i != 2:
         #     ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
         plt.setp(ax.xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
 
     decomp_fig.suptitle(
-        f'Seasonal Decomposition of {symbol} Time Series: {timeframe}, Frequency = {freq}', fontsize=24)
+        f'Seasonal Decomposition of {symbol} Time Series\n{timeframe}, Seasonality = 1 Year', fontsize=30)
     decomp_fig.tight_layout()
-    decomp_fig.subplots_adjust(top=0.94)
+    decomp_fig.subplots_adjust(top=0.9)
     plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_seasonal_decomp.png')
 
 
@@ -533,5 +582,45 @@ def visualize_results(df1, df2):
     fig.tight_layout(pad=2.0)
     plt.savefig(f'{top}/images/final_forecasts.png')
 
-def best_3_zipcodes(sorted_df, bedrooms):
-    print(f'The zipcodes with the greatest projected growth in mid-tier {bedrooms}-bedroom home values are:\n{sorted_df.iloc[-3]}\n {sorted_df.iloc[-2]}\n {sorted_df.iloc[-1]}')
+def model_stats(features, model, model_type, X_test, y_test, binary = False):
+    '''
+    Taking in a list of columns, a model, an X matrix, a y array, predicts
+    labels and outputs model performance metrics.
+    '''
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)
+    print('Classifier: ', model_type)
+    print('Num features: ', features.size)
+    print('Model score: ', model.score(X_test, y_test))
+    print('Accuracy score: ', accuracy_score(y_test, y_pred))
+    print('Model F1 (micro): ', f1_score(y_test, y_pred, average='micro'))
+    print('Model F1 (macro): ', f1_score(y_test, y_pred, average='macro'))
+    print('Model F1 (weighted): ', f1_score(y_test, y_pred, average='weighted'))
+    print('Cross validation score: ', cross_val_score(model, X_test, y_test, cv=5) )
+    print('Classification Report:')
+    print(classification_report(y_test, y_pred))
+    # ax.set_ylabel(f'{model_type} Confusion Matrix', fontdict = {'fontsize': 12})
+    if binary == False:
+        macro_roc_auc_ovo = roc_auc_score(y_test, y_prob, multi_class="ovo",
+                                      average="macro")
+        weighted_roc_auc_ovo = roc_auc_score(y_test, y_prob, multi_class="ovo",
+                                             average="weighted")
+        macro_roc_auc_ovr = roc_auc_score(y_test, y_prob, multi_class="ovr",
+                                          average="macro")
+        weighted_roc_auc_ovr = roc_auc_score(y_test, y_prob, multi_class="ovr",
+                                             average="weighted")
+        print("One-vs-One ROC AUC scores:\n{:.6f} (macro),\n{:.6f} "
+              "(weighted by prevalence)"
+              .format(macro_roc_auc_ovo, weighted_roc_auc_ovo))
+        print("One-vs-Rest ROC AUC scores:\n{:.6f} (macro),\n{:.6f} "
+              "(weighted by prevalence)"
+              .format(macro_roc_auc_ovr, weighted_roc_auc_ovr))
+        fig, ax = plt.subplots(figsize = [6,5])
+        plot_confusion_matrix(model, X_test, y_test, ax = ax)
+        ax.set_title(f'{model_type} Confusion Matrix', fontdict = {'fontsize': 14})
+    elif binary == True:
+        fig, ax = plt.subplots(2, 1, figsize = [6,10])
+        plot_confusion_matrix(model, X_test, y_test, ax = ax[0])
+        ax[0].set_title(f'{model_type} Confusion Matrix', fontdict = {'fontsize': 14})
+        plot_roc_curve(model, X_test, y_test, ax = ax[1])
+        ax[1].set_title(f'{model_type} Receiver Operating Characteristic Curve', fontdict = {'fontsize': 14})
