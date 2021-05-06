@@ -1,64 +1,73 @@
-# Time Series projections for Zillow Housing Data For Flatiron School Data Science Immersive (Phase 4 Project)
+# I SPY: Time Series Analysis for SPY ETF for Flatiron School Data Science Immersive (Capstone Project)
   
 ## Overview  
-In this project, we examine and perform time series analysis on a data set of housing data from [Zillow Research](https://www.zillow.com/research/data/) to determine whether 1-bedroom or 2-bedrooms homes in San Fransciso would be better for investment on a 1 year time horizon.  
+In this project, we examine and perform time series analysis on the [SPDR® S&P 500® ETF Trust](https://www.ssga.com/us/en/institutional/etfs/funds/spdr-sp-500-etf-trust-spy) to forecast future prices and inform trading decisions.  
 
-![california_house](images/california_housing.jpg)  
+![finance](data/finance.jpeg)  
   
 ## Motivation  
-To make informed recommendations to investment advisors, real estate brokers, and houseowners who are looking to invest in a mid-tier 1 or 2-bedroom home in the San Francisco area. This best captures the intent of a couple looking for their first home, or a yuppie looking to buy their first property, and may choose to upgrade and sell for a profit in one year.
+While institutional investors leverage enterprise-grade data feeds and models to plan execute trades in the sub-second time-frame, amateur investors are limited primarily to free data and tools and make investment decisions. The goal is to take freely available public data and, leveraging machine learning modalities to predict the movement of financial instruments to help the little guy get on the right side of the trade, more often than not. The tick 'SPY' (aka "Spiders") was chosen because it is well established, highly liquid, and popular.
 
 ## Data  
-Our [data set](Zip_zhvi_bdrmcnt_2_uc_sfrcondo_tier_0.33_0.67_sm_sa_mon.csv) comes from the [Research division of Zillow Group](https://www.zillow.com/research/), used with permission. The data represents the typical home values for the zip codes listed for homes falling between the 35th and 65th percentile of home values. General info on the data set is available [here](https://www.zillow.com/research/zhvi-methodology-2019-highlights-26221), and full details are available [here](https://www.zillow.com/research/zhvi-methodology-2019-deep-26226).  
-  
-### Historical Data Examined  
-Typical home values are published on the third Thursday of each month, and gives monthly data from 1996 to present.  
+Our primary SPY time series data comes the [yfinance API](https://github.com/ranaroussi/yfinance). As our MVP, we focused on the Close price marked at EOD of each trading data as well as the Volume traded as an exogenous variable.
+
+### Historical Data  
+The SPY ETF, since it tracks the S&P 500 Index, show positive growth over time, and has tripled in price in the last 10 years. There is also some cyclical and seasonality present.  
 
 ### Target Variable  
-We will forecast time series data 12 months in the future for all relevant zip codes (25 in total) in 1-bedroom and 2-bedroom data sets.  We will then compare the top performing zip codes.
-  
+We will forecast SPY closing price up to 15 trading days into the future, ending on a Friday.
+
 ## Methods  
 Our methodology implements the CRISP-DM model for exploratory data analysis, cleaning, modeling, and evaluation.  
-We leveraged SARIMAX modeling from [statsmodels](https://www.statsmodels.org/stable/generated/statsmodels.tsa.statespace.sarimax.SARIMAX.html) to analysis and forecast the home values. The quality of our modeling was determined with the [AIC value](https://en.wikipedia.org/wiki/Akaike_information_criterion). We also performed statistical analysis via [SciPy Stats](https://docs.scipy.org/doc/scipy/reference/stats.html) to further make inferences on the data.  
-Other tools used include Python, NumPy, and Pandas. Visualizations were created with MatPlotLib and Seaborn.  
+We leveraged ARIMA modeling from [pmdarima](http://alkaline-ml.com/pmdarima/) to analyze and forecast SPY closing prices. The quality of our modeling was inferred from [AIC value](https://en.wikipedia.org/wiki/Akaike_information_criterion) and evaluated with [RMSE](https://en.wikipedia.org/wiki/Root-mean-square_deviation) and [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error). We also performed statistical analysis via [SciPy Stats](https://docs.scipy.org/doc/scipy/reference/stats.html) to further make inferences on the data.  
+Other tools used include NumPy, Pandas. Visualizations were created with MatPlotLib and Seaborn.  
   
 ## Conclusion
-After running SARIMAX analysis on all zip codes in San Francisco, we found the following zip codes that showed the greatest projected appreciation in value:  
-Type of Home    |  Zip Codes                    | Projected </br> Home Value </br> Growth  
-:---------------|:------------------------------|-----------------------------:  
-1-Bedroom Homes | 94124 </br> 94134 </br> 94132 | 6.03% </br> 5.61% </br> 3.57% 
-2-Bedroom Homes | 94121 </br> 94116 </br> 94134 | 4.41% </br> 3.07% </br> 2.74% 
+After running ARIMA analysis on various combinations of timeframes, observation frequencies, and seasonalities, we chose daily frequencies with a yearly seasonality, for 3 Year, 5 Year, and 10 Year timeframes.  Using a custom GridSearchCV function, we found ideal parameters for model, separately, the Volume and Close time series. We fit and predicted on Volume on 12 days ahead, then used the results as exogenous variables to fit and predict on Close.  
 
-<b>We see that 1-bedroom homes in zip code 94124 shows the greatest project growth in value.</b>  
-Perhaps unsurprisingly, this zip code currently has the lowest prices for San Francisco 1-bedroom homes.  According to our model, in a year's time this zip code will be ranked 5th lowest in price out of the 25 zip codes.
+Here is a summary of our best models, for the 10 Year time series:
+Variable  |    AIC   |     RMSE    |  SMAPE
+:---------|:---------|-------------|--------:  
+Volume    | 269.89   |     4.47    |  0.931% 
+Close     | 12244.82 | 23971769.85 | 22.826% 
+
+Our results so far are encouraging; out of three trading days, our predictions were right (within 50 cents) of the actual price.
 
 ## Further Actions  
-Using exogenous such as school district data, crime data, presence of parks/nature in vicinity, proximity to hospitals, groceries, entertainment, transportation etc., we can further refine our model as well as assign weights based on what a home buyer is looking to prioritize. We may find that growth in home value may be highly correlated to better education, lower crime rate, etc.   
-We would like to further optimize our model by incorporating exogenous data on interest rates, market changes, macroeconomic indicators, and other large scale fluctuations. With more data, we would be able to more accurately forecast home values into the future.  
-      
+- We will build a Buy/Hold/Sell indicator to recommend **trading decisions**, as well as implement a _profit calculator_ using historical data to evaluate _model performance_ in the real world compared against simpling buy and holding.  
+- Using aditional **exogenous variables** such as SPY Futures data, recession dates, options trade data, options expiry data, jobs data, and Treasury yield curve data, we will be able to implement a more robust model.  
+- Additional _time series_ **modeling** can be built using TBATS, Facebook Prophet. We can also explore _neural networks_ such as LSTM, RNN, CNN to model and predict on SPY closing price. Initial results on _logistic regression_ has shown some promise, and we can delve into that as well.  
+- We can build a **web-scraping tool** to gather and anayze _market sentiment_ on Twitter, Reddit, etc.
+- Using available libraries as well as creating our own, we can plot and incorporate **technical indicators** such as MACD, RSI, Bollinger Bands, Support/Resistance, Stochastic, CCI, OBV, and Elliot Wave Analysis into our model.  
+- Finally, we can create a **real-time model** that will automatically fetch and run models on each new observation. We can then build a _web app_ to allow us to access these predictions on the fly.  
+     
 ## Index  
 - **code/** — directory containing python code files
   - **functions.py** — helper functions
+  - **Pmdarima_Model.py** - custom class for running pmdarima models and tools
 - **crisp_dm_process/** — directory for initial EDA and model notebook files  
-  - **SF_Modeling.ipynb** — notebook file that includes thorough initial data exploration, insights, and takeaways  
-- **data/** — directory of project data sets as well as model output data
-- **images/** — directory containing the following:  
-  - image exports of visualizations  
+  - **spy_av_eda.ipynb** — notebook file for data exploration and modeling on AlphaVantage data using SARIMAX
+  - **spy_eda_colab.ipynb** — notebook file for data exploration and modeling using Google Colab
+  - **spy_yf_eda.ipynb** — notebook file for data exploration and modeling on yfinance SPY data using pmdarima - primary notebook for MVP
+  - **spy_yf_fut_eda.ipynb** — notebook file for exploration and modeling using yfinance SPY Futures data
+- **data/** — directory of project data sets
+- **images/** — directory containing all image files:  
+  - exports of data visualizations  
   - additional images for README
-- **zillow_housing_final.ipynb** — primary project notebook  
-- **Zillow_Housing_Project_JS_WAX.pdf** - presentation slides PDF
-- **README.md**  
+- **spy_final_notebook.ipynb** — final project notebook  
+- **I SPY MVP.pdf** - presentation slides PDF
+- **README.md** - this file
   
 ## Bibliography  
 1. Dataset Origin:  
   
-       Zillow Research Housing Data  
-               Zillow Group  
-2. Date:    Thursday April 15, 2021
-3. Web Source:  https://www.zillow.com/research/data/             
+       Yahoo! Finance Stock Data  
+            Yahoo! Group  
+2. Last Access:    Wednesday May 5, 2021. 
+3. Web Source:  https://finance.yahoo.com/quote/SPY            
   
-<div align="center";>Authors  
-  <div align="center";>Jonathan Silverman & Wei Alexander Xin   
+<div align="center";>Author 
+  <div align="center";>Wei Alexander Xin  
     
-[Jonathan's GitHub](https://github.com/silvermanjonathan) | [Alexander's GitHub](https://github.com/eggrollofchaos)  
-[Jonathan's LinkedIn](https://www.linkedin.com/in/jonathansilverman007) | [Alexander's LinkedIn](https://www.linkedin.com/in/waximus)
+[Alexander's GitHub](https://github.com/eggrollofchaos)  
+[Alexander's LinkedIn](https://www.linkedin.com/in/waximus)
