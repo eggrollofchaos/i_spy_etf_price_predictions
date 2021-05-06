@@ -49,7 +49,7 @@ pd.set_option('display.max_rows',25)
 from functions import *
 
 from pathlib import Path
-top = Path(__file__ + '../../..').resolve()
+TOP = Path(__file__ + '../../..').resolve()
 
 NYSE = mcal.get_calendar('NYSE')
 CBD = pd.offsets.CustomBusinessDay(calendar=NYSE)
@@ -121,7 +121,9 @@ class Pmdarima_Model:
         self.__train_test_split_dates()
         self.y_hat = None
         self.conf_ints = None
+        self.AIC = None
         self.RMSE = np.inf
+        self.SMAPE = 100
         self.GS_first_mod = True
         print('Successfully created instance of Class Pmdarima_Model.') if verbose else None
 
@@ -152,6 +154,9 @@ class Pmdarima_Model:
             mod_params += ', LogEndogTransformer'
 
         return mod_params, mod_pipe
+
+    def fit_model(self, model):
+        model.fit(self.y_train, self.X_train)
 
     def __get_model_params(self, p, d, q, t, no_intercept, date, fourier, box, log, verbose=1):
         date_feat = pm.preprocessing.DateFeaturizer(
@@ -197,15 +202,16 @@ class Pmdarima_Model:
     def __train_test_split_dates(self):
         self.X_train, self.y_train, self.X_test, self.y_test = self.__split_df_dates(self.df_train, self.df_test)
 
-    def __run_stepwise_CV(self, model=None, dynamic=False, verbose=1, debug=False):
+    def __run_stepwise_CV(self, model=None, func='AA', dynamic=False, verbose=1, debug=False):
+        '''
+        Heavily modified from https://github.com/alkaline-ml/pmdarima/issues/339
+        '''
         def __forecast_one_step(date_df):
             fc, conf_int = model.predict(X=date_df, return_conf_int=True)
-            return (
-                # fc.tolist()[0],
-                fc.tolist()[0],
-                # np.asarray(conf_int).tolist()[0]
-                conf_int[0].tolist()
-                )
+            return fc.tolist()[0], conf_int[0].tolist()
+        if not model:
+            model = self.AA_mod_pipe
+            print('No model specified, defaulting to AutoARIMA best model.') if verbose else None
         X_train = self.X_train
         X_test = self.X_test
         y_train = self.y_train
@@ -227,15 +233,24 @@ class Pmdarima_Model:
         if verbose:
             print(f'Iteratively making predictions on {self.data_name} Time Series and updating model{dynamic_str}, beginning with first index of y_test ...')
         for n, new_ob in enumerate(tqdm(y_test, desc='Step-Wise Prediction Loop')):
+
             fc, conf = __forecast_one_step(date_df)
+
+                # print(e)
+                # print('Fitting on class variables X_train, y_train.')
+                # model.fit(self.y_train, self.X_train)
+                # self.fit_model(model)
+                # fc, conf = __forecast_one_step(date_df)
             forecasts.append(fc)
             conf_ints.append(conf)
 
-            # Updates the existing model with a small number of MLE steps
+            # update the existing model with a small number of MLE steps
             if dynamic:
                 model.update([fc], date_df)
             elif not dynamic:
                 model.update([new_ob], date_df)
+
+            ## make a little animation
             if n&1:
                 print('>_', end='\r')
             else:
@@ -257,7 +272,8 @@ class Pmdarima_Model:
         if verbose:
             print(model[0])
             print(model[1])
-        model[1].fit(self.y_train, self.X_train)
+        # model[1].fit(self.y_train, self.X_train)
+        self.fit_model(model[1])
         result = None
         # convert config to a key
         key = str(model[0])
@@ -281,7 +297,9 @@ class Pmdarima_Model:
         if result:
             print('Model[%s]: AIC=%.3f | RMSE=%.3f | SMAPE=%.3f%%' % (key, *result))
             if result[1] < self.RMSE:
+                self.AIC = result[0]
                 self.RMSE = result[1]
+                self.SMAPE = result[2]
                 self.y_hat = y_hat
                 self.conf_ints = conf_ints
                 self.GS_best_mod_pipe = model[1]
@@ -296,6 +314,9 @@ class Pmdarima_Model:
 
     def __gridsearch_CV(self, max_order=6, t_list=['n','c','t','ct'], no_intercept=False, date=True, fourier=True, box=False,
         log=False, verbose=0, debug=False, parallel=True):
+        '''
+        Heavily modified from https://machinelearningmastery.com/how-to-grid-search-sarima-model-hyperparameters-for-time-series-forecasting-in-python/
+        '''
         def __GS_setup_params(t_list=['n','c','t','ct'], no_intercept=False, date=True, fourier=True, box=False, log=False, verbose=0):
 
             # date_feat = pm.preprocessing.DateFeaturizer(
@@ -423,10 +444,20 @@ class Pmdarima_Model:
         print('Top 10 models:')
         for model, AIC, RMSE, SMAPE in scores[:10]:
             print('Model[%s]: AIC=%.3f | RMSE=%.3f | SMAPE=%.3f%%' % (model, AIC, RMSE, SMAPE))
-
+        self.__pickle_model(func='GS', verbose=verboes)
         return self.GS_best_mod_pipe, scores
 
-    def __run_manual_pipeline(self, train, test, n_diffs):
+    def __pickle_model(self, func='AA', verbose=1):
+        pkl_file = f'{TOP}/models/{self.tf}_{self.f}_{func}_best_model.pkl'
+        pkl_out = open(pkl_file, 'wb')
+        if func = 'GS':
+            func_type = 'GridSearchCV'
+            pkl.dump((self.GS_best_params, self.GS_best_mod_pipe), pkl_out)
+        if func = 'AA':
+            func_type = 'AutoARIMA'
+            pkl.dump((self.AA_best_params, self.AA_best_mod_pipe), pkl_out)
+        print(f'Saved best {func_type} model as {pkl_file}') if verbose else None
+        pkl_out.close()
         return
 
     def __split_df_dates(self, train, test):
@@ -439,7 +470,8 @@ class Pmdarima_Model:
     def __run_auto_pipeline(self, show_summary=False, return_conf_int=False, verbose=1):
         pm.tsdisplay(self.df_train, lag_max=60, title = f'{self.data_name} Time Series Visualization') \
             if show_summary else None
-        X_train, y_train, X_test, y_test = self.__split_df_dates(self.df_train, self.df_test)
+        # X_train, y_train, X_test, y_test = self.__split_df_dates(self.df_train, self.df_test)
+        self.__train_test_split_dates()
 
         params = []
         if self.date:
@@ -485,13 +517,12 @@ class Pmdarima_Model:
 
         print(f'Parameters for Pipeline: \n{params}\n') if verbose == 1 else None
         pipe = pipeline.Pipeline(params)
-        pipe.fit(y_train, X_train)
+        # pipe.fit(y_train, X_train)
+        self.fit_model(pipe)
 
         # save best params
         pipe_params = [(name, transform) for name, transform in pipe.named_steps.items()]
-        pkl_out = open(f'{top}/models/3Y_AA_best_model.pkl', 'wb')
-        pkl.dump(pipe_params, pkl_out)
-        pkl_out.close()
+        self.__pickle_model(func='AA', verbose=verboes)
         best_arima = pipe.named_steps['arima'].model_
         self.AA_best_params = self.AA_best_params.replace('()', str(best_arima.order))
         self.AA_mod_pipe = pipe
@@ -529,13 +560,13 @@ class Pmdarima_Model:
         ax.set_ylabel(ylabel, size=14)
         if func == 'AA':
             ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=16)
-            plt.savefig(f'{top}/images/AutoArima/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
+            plt.savefig(f'{TOP}/images/AutoArima/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
         elif func == 'GS':
             ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=16)
-            plt.savefig(f'{top}/images/GridSearch/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
+            plt.savefig(f'{TOP}/images/GridSearch/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
         else:
             ax.set_title(f'Parameters: {self.mod_params}', size=16)
-            plt.savefig(f'{top}/images/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
+            plt.savefig(f'{TOP}/images/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
 
     def plot_forecast_conf(self, ohlc_df=None, hist_df=None, y_hat=None, conf_ints=True, days_fc=5,
             lookback=120, ylabel=None, fin=False, func='GS'):
@@ -579,13 +610,13 @@ class Pmdarima_Model:
         ax.legend(loc='upper left', borderaxespad=0.5)
         if func == 'AA':
             ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=16)
-            plt.savefig(f'{top}/images/AutoArima/{ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
+            plt.savefig(f'{TOP}/images/AutoArima/{ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
         elif func == 'GS':
             ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=16)
-            plt.savefig(f'{top}/images/GridSearch/{ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
+            plt.savefig(f'{TOP}/images/GridSearch/{ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
         else:
             ax.set_title(f'Parameters: {self.mod_params}', size=16)
-            plt.savefig(f'{top}/images/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
+            plt.savefig(f'{TOP}/images/{ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
 
     def __get_model_scores(self, y_test, y_hat, y_train, model, verbose=0, debug=False):
         # pipe = self.mod_pipe
@@ -619,6 +650,9 @@ class Pmdarima_Model:
             print(f'Starting step-wise cross-validation{model_str}...')
         X_train, y_train, X_test, y_test, y_hat, conf_ints = self.__run_stepwise_CV(model=model, dynamic=dynamic)
         AIC, RMSE, SMAPE = self.__get_model_scores(y_test, y_hat, y_train, model=model, verbose=verbose)
+        self.AIC = AIC
+        self.RMSE = RMSE
+        self.SMAPE = SMAPE
         if visualize:
             # self.plot_test_predict(y_hat, ylabel=self.data_name, func=func)
             self.plot_test_predict(y_hat, conf_ints=return_conf_ints, ylabel=self.data_name, func=func)
@@ -633,7 +667,10 @@ class Pmdarima_Model:
         self.AA_best_params, self.AA_mod_pipe = self.__reset_mod_params()
         X_train, y_train, X_test, y_test, y_hat, conf_ints = \
             self.__run_auto_pipeline(show_summary=show_summary, return_conf_int=True)
-        self.__get_model_scores(y_test, y_hat, y_train, model=self.AA_mod_pipe, verbose=verbose)
+        AIC, RMSE, SMAPE = self.__get_model_scores(y_test, y_hat, y_train, model=self.AA_mod_pipe, verbose=verbose)
+        self.AIC = AIC
+        self.RMSE = RMSE
+        self.SMAPE = SMAPE
         if visualize:
             # self.plot_test_predict(y_hat, ylabel=self.data_name, func='AA')
             self.plot_test_predict(y_hat, conf_ints=return_conf_ints, ylabel=self.data_name, func='AA')
