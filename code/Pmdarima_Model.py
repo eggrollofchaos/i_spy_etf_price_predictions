@@ -925,6 +925,8 @@ class Pmdarima_Model:
             ax.set_title(f'Parameters: {self.mod_params}', size=16)
             plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
 
+
+
     def __get_model_scores(self, y_test, y_hat, y_train, model, verbose=0, debug=False):
         # pipe = self.mod_pipe
         # if type(pipe.named_steps['arima']=='pm.ARIMA'):
