@@ -1,6 +1,8 @@
 import os
 from random import random
 import pandas as pd
+from pandas.tseries.offsets import CustomBusinessMonthBegin, BDay
+from pandas.tseries.holiday import *
 import matplotlib
 import numpy as np
 import csv
@@ -8,8 +10,9 @@ import itertools
 import pickle as pkl
 
 import time
-import datetime
+from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
+import pandas_market_calendars as mcal
 
 import pmdarima as pm
 from pmdarima import pipeline
@@ -37,8 +40,8 @@ from matplotlib.ticker import FuncFormatter
 sns.set_theme(style="darkgrid")
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
-munits.registry[datetime.date] = converter
-munits.registry[datetime.datetime] = converter
+munits.registry[date] = converter
+munits.registry[datetime] = converter
 
 font = {'size'   : 12}
 matplotlib.rc('font', **font)
@@ -47,10 +50,11 @@ pd.set_option('display.max_columns',None)
 pd.set_option('display.max_rows',25)
 
 from pathlib import Path
-top = Path(__file__ + '../../..').resolve()
+TOP = Path(__file__ + '../../..').resolve()
 # columns for Alpha Vantage output
 AV_COLUMNS = ['time', 'open', 'high', 'low', 'close', 'volume']
 YF_COLUMNS = ['open', 'high', 'low', 'close', 'adj_close', 'volume']
+YF_F_COLUMNS = ['f_open', 'f_high', 'f_low', 'f_close', 'f_adj_close', 'f_volume']
 # custom formatter
 
 class CustomFormatter(FuncFormatter):
@@ -80,7 +84,13 @@ days = mdates.DayLocator()
 days_fmt = mdates.DateFormatter('%B %d, %Y')
 hours = mdates.HourLocator()
 hours_fmt = mdates.DateFormatter('%B %d, %Y %H:00')
-print(f'Functions loaded from {top}/data.')
+
+NYSE = mcal.get_calendar('NYSE')
+CBD = NYSE.holidays()
+
+print(f'Functions loaded from {TOP}/data.')
+
+
 
 ################################################################################
 
@@ -96,25 +106,67 @@ def round_sig_figs(x, p):
     mags = 10 ** (p - 1 - np.floor(np.log10(x_positive)))
     return np.round(x * mags) / mags
 
-def get_yf_time_series(yf, years, ticker, freq):
+class CustomUSHolidayCalendar(AbstractHolidayCalendar):
+    rules = [
+        Holiday('New Years Day', month=1, day=1, observance=nearest_workday),
+        Holiday('GFordMourning', year=2007, month=1, day=2),
+        USMartinLutherKingJr,
+        Holiday('Washington\'s Birthday', month=2, day=15, offset=DateOffset(weekday=MO(1))),
+        GoodFriday,
+        USMemorialDay,
+        Holiday('RWReaganMourning', year=2004, month=6, day=11),
+        Holiday('July 4th', month=7, day=4, observance=nearest_workday),
+        Holiday('Labor Day', month=9, day=1, offset=DateOffset(weekday=MO(1))),
+        Holiday('September11_1', year=2001, month=9, day=11),
+        Holiday('September11_2', year=2001, month=9, day=12),
+        Holiday('September11_3', year=2001, month=9, day=13),
+        Holiday('September11_4', year=2001, month=9, day=14),
+        Holiday('SandyHurricane_1', year=2012, month=10, day=29),
+        Holiday('SandyHurricane_2', year=2012, month=10, day=30),
+        USThanksgivingDay,
+        Holiday('GWBushMourning', year=2018, month=12, day=5),
+        Holiday('Christmas', month=12, day=25, observance=nearest_workday),
+    ]
+
+
+# def get_quandl_time_series(years, symbol, freq):
+#     df = quandl.get("USTREASURY/YIELD")
+#     df_all = df.sort_index().truncate(before=spy_df_all.index[0], after=spy_df_all.index[-1])
+#     df_10Y = df_all.sort_index().truncate(before=spy_df_10Y.index[0])
+#     df_5Y = df_10Y.sort_index().truncate(before=spy_df_5Y.index[0])
+#     df_3Y = df_5Y.sort_index().truncate(before=spy_df_3Y.index[0])
+
+
+def get_yf_time_series(yf, years, symbol, freq, fut=False):
     for year in years:
         start_year = pd.Timestamp.today().year - year
+        year = f'{year}Y'
         start_date = pd.to_datetime(f'{start_year}-05-01')
+        if start_date < pd.to_datetime(f'1993-01-29'):
+            start_date = pd.to_datetime(f'1993-01-29')
+            year = 'All'
         start_file = start_date.date() if freq.is_on_offset(start_date) else (start_date+freq).date()
         if pd.Timestamp.now() > (pd.Timestamp.today().date() + pd.offsets.Hour(16)):
             end_date = pd.Timestamp.today()
         else:
-            end_date = pd.Timestamp.today().date() - pd.offsets.Hour(4)
+            end_date = pd.Timestamp.today().date() - freq + pd.offsets.Hour(16)
         end_file = end_date.date()
 
-        df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+        df = yf.download(symbol, start=start_date, end=end_date, progress=False)
         df.index = df.index.rename('date')
-        df.columns = YF_COLUMNS
-        df.to_csv(f'{top}/data/{ticker}_{year}Y_CBD_{start_file}_{end_file}.csv')
+        if fut:
+            df.columns = YF_F_COLUMNS
+        else:
+            df.columns = YF_COLUMNS
+        df.to_csv(f'{TOP}/data/{symbol}_{year}_CBD_{start_file}_{end_file}.csv')
 
-def load_yf_time_series(yf, year, ticker, freq):
+def load_yf_time_series(yf, year, symbol, freq):
     start_year = pd.Timestamp.today().year - year
+    year = f'{year}Y'
     start_date = pd.to_datetime(f'{start_year}-05-01')
+    if start_date < pd.to_datetime(f'1993-01-29'):
+        start_date = pd.to_datetime(f'1993-01-29')
+        year = 'All'
     start_file = start_date.date() if freq.is_on_offset(start_date) else (start_date+freq).date()
 
     if pd.Timestamp.now() > (pd.Timestamp.today().date() + pd.offsets.Hour(16)):
@@ -123,10 +175,152 @@ def load_yf_time_series(yf, year, ticker, freq):
         end_date = pd.Timestamp.today().date() - freq + pd.offsets.Hour(16)
     end_file = end_date.date()
 
-    df = pd.read_csv(f'../data/{ticker}_{year}Y_CBD_{start_file}_{end_file}.csv', index_col='date')
+    df = pd.read_csv(f'../data/{symbol}_{year}_CBD_{start_file}_{end_file}.csv', index_col='date')
     df.index = pd.to_datetime(df.index)
 
     return df
+
+def set_up_calendar_index(df, cal):
+    start = df.index[0]
+    end = df.index[-1]
+    dates = cal.valid_days(start_date=start, end_date=end, tz='America/New_York')
+    df.index = dates
+    df.index.name = 'date'
+
+    return df
+
+def csv_read(csv_filepath, data):
+    '''
+    Given a target filepath and read next line.
+    '''
+    with open(csv_filepath, newline='') as csvfile:
+#     fieldnames = ['first_name', 'last_name']
+        reader = csv.reader(csvfile)
+        line = next(reader)
+    return line
+    # print(fieldnames)
+
+def csv_create(csv_filepath, headers):
+    with open(csv_filepath, 'w', newline = '') as csvfile:
+#         data_fields = parsed_results[0].keys()
+        writer = csv.DictWriter(csvfile, fieldnames = headers)
+        writer.writeheader()
+    return data_fields
+
+def check_mod_score_exists(csv_filepath, data_df, verbose=1):
+    '''
+    Given a target filepath and data as a dict,
+    check if the model already exists and has been scored.
+    '''
+    # print(csv_filepath)
+    if not os.path.exists(csv_filepath):
+        # csv_create(csv_filepath)
+        # csv_append(csv_filepath, data)
+        return False
+    else:
+        file_df = pd.read_csv(csv_filepath, index_col='Model')
+        # reset index just in case file was tampered
+        file_df = file_df.reset_index(drop=True)
+        file_df.index.name = 'Model'
+        file_df.to_csv(csv_filepath)
+        for index, row in file_df.iterrows():
+            # print('Next model: \n', row[0:9]) if verbose else None
+            if row[0:10].equals(data_df.iloc[0,0:10]):
+                print('Model found in file. ', end='') if verbose else None
+                if row[10]:
+                    print('Already scored. ', end='') if verbose else None
+                    return -1, file_df
+                else:
+                    print('Not yet scored. ', end='') if verbose else None
+                    print(f'Index is {index}')
+                    return index, file_df
+        # else:
+        print('Model not already present in file. ', end='') if verbose else None
+        return -2, file_df
+
+def __get_conf_ints_pc(conf_ints, data):
+    conf_int_range = [int[1] - int[0] for int in conf_ints]
+    cont_int_pc = 100*conf_int_range/np.mean(data)
+    return conf_int_pc
+
+def csv_write_data(csv_filepath, data_df, verbose=1):
+    '''
+    Given a target filepath and data_df as a dict,
+    write or append to CSV file. Replaces unscored model with scored data_df.
+    '''
+    if not os.path.exists(csv_filepath):    # file does not exist
+        # csv_create(csv_filepath)
+        # csv_append(csv_filepath, data)
+        data_df.to_csv(csv_filepath)
+    else:                                   # file exists
+        add_score = False
+        if data_df.iloc[0,10]:              # data_df contains a score
+            add_score = True
+            print('Adding a new score to file... ', end='') if verbose else None
+        else:
+            print('Adding model params to file... ', end='') if verbose else None
+
+        index, file_df = check_mod_score_exists(csv_filepath, data_df, verbose=verbose)
+        if index == -1:                     # model found, already scored
+            print('Nothing to do. ', end='') if verbose else None
+            return index
+        elif index == -2:                   # model not found
+            print(f'Index = {index}. ') if verbose>1 else None
+            if add_score:                   # have score to add
+                print('Appending model scores to file. ', end='') if verbose else None
+                print(data_df) if verbose>1 else None
+            else:                           # only have model params to add
+                print('Appending model params to file. ', end='') if verbose else None
+                print(data_df) if verbose>1 else None
+            # csv_append(csv_filepath, data_df.reset_index().to_dict('records'))
+            file_df = file_df.append(data_df).drop_duplicates(keep='last')
+            file_df = file_df.reset_index(drop=True)
+            file_df.index.name = 'Model'
+            # print('Appended: \n', file_df)
+            file_df.to_csv(csv_filepath)
+            return index
+
+        if add_score:                       # model found, not yet scored, add score
+            print(f'Adding scores to model, updating line {index}. ', end='') if verbose else None
+            print(data_df) if verbose>1 else None
+            file_df.iloc[index] = data_df.iloc[0]
+            file_df.to_csv(csv_filepath)
+            return index
+
+        print(f'Model found at line {index}, nothing to do. ', end='') if verbose else None
+        return
+        # file_df = pd.read_csv(csv_filepath)
+        # for index, row in file_df.iterrows():
+        #     print('Model: \n', row[0:9]) if verbose else None
+        #     if row[0:9].equals(data_df.iloc[0,0:9]):
+        #         print('Model found.') if verbose else None
+        #         if row[9]:
+        #             print('Already scored.') if verbose else None
+        #             return
+        #         else:
+        #             file_df.iloc[index] = data_df
+        #             file_df.to_csv(csv_filepath)
+        #             return
+
+        # model not found
+        # print('Model not found, appending: \n', data_df) if verbose else None
+        # csv_append(csv_filepath, data_df)
+        # return
+                    # file_df.drop(index=index)
+                    # file_df.append(data_df, index=index)
+                    #
+
+def csv_append(csv_filepath, data_dict):
+    '''
+    Given a target filepath and data as a list of dicts,
+    append to CSV file (without Headers)
+    '''
+    # your code to open the csv file, concat the current data, and save the data.
+    with open(csv_filepath, 'a', newline = '') as csvfile:
+#         data_fields = ['id', 'name', 'is_closed', 'review_count', 'zip_code, 'rating', 'price]
+        data_fields = data_dict[0].keys()
+        writer = csv.DictWriter(csvfile, fieldnames = data_fields)
+        writer.writerows(data_dict)
 
 def get_av_all_data_slices(symbol, ts, y=2, m=12, interval = '60min', verbose=0):
     '''
@@ -229,6 +423,49 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
     ax.set_xlabel(label, size = 18)
     fig.autofmt_xdate()
 
+def plot_4_time_series(data):
+    '''
+    Plot the SPY, SPY Futures, 10Y Treasury Yield, and Fed Funds Curve
+    '''
+    colors = ['b','c','g','r']
+    labels = ['SPY 3Y Close', 'SPY Futures 3Y Close', '10Y Treasury Yield', 'Fed Funds Rate']
+    ylabels = ['SPY 3Y Close (USD)', 'SPY Futures 3Y Close (USD)', '10Y Treasury Yield %', 'Fed Funds Rate %']
+    alpha = [0.9, 1, 1, 1]
+    spy_range = (225, 425)
+    yield_range = (0, 4)
+    num_ticks = 9
+    y_ranges = [spy_range, [10*x for x in spy_range], yield_range, yield_range]
+    tick_params = dict(size=4, width=1.5, labelsize=16)
+    fig, ax1 = plt.subplots(figsize=(20,15))
+    ax2 = ax1.twinx()
+    ax3 = ax1.twinx()
+    ax4 = ax1.twinx()
+    axes = [ax1, ax2, ax3, ax4]
+    for n, ax in enumerate(axes):
+        if n==1:
+            ax.spines['left'].set_position(("axes", -0.06))
+            ax.spines['left'].set_edgecolor(colors[n])
+            ax.yaxis.set_label_position("left")
+            ax.yaxis.tick_left()
+        if n>1:
+            ax.spines['right'].set_position(("axes", 1 + 0.04*(n-2)))
+            ax.spines['right'].set_edgecolor(colors[n])
+        data[n].plot(ax=ax, color=colors[n], alpha=alpha[n], label=labels[n])
+        y_ticks = np.linspace(y_ranges[n][0], y_ranges[n][1], num_ticks)
+        pad = (y_ranges[n][1] - y_ranges[n][0]) / (num_ticks-1)/5
+        y_lim = (y_ranges[n][0]-pad, y_ranges[n][1]+pad)
+        ax.set_yticklabels(y_ticks)
+        ax.set_yticks(y_ticks)
+        ax.set_ylim(y_lim)
+        ax.tick_params(axis='y', colors=colors[n], **tick_params)
+
+    ax1.set_xlabel('Date', size=24)
+    ax1.tick_params(axis='x', **tick_params)
+    fig.suptitle(', '.join(labels), size=32)
+    fig.subplots_adjust(top=0.92)
+    fig.legend(loc=(0.139, 0.8007), prop={"size":16})
+    plt.savefig(f'{TOP}/images/SPY_3Y_Comparison_Graph.png')
+
 def test_stationarity(df_all, diffs=0):
     if diffs == 2:
         dftest = adfuller(df_all.diff().diff().dropna())
@@ -281,7 +518,7 @@ def plot_acf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
     ax[2].set_ylabel('ACF', size=14)
     acf_fig.tight_layout()
     acf_fig.subplots_adjust(top=0.9)
-    plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_ACF.png')
+    plt.savefig(f'{TOP}/images/{symbol}_{timeframe}_{freq}_ACF.png')
 
 def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
     timeframe = f'{n} {period.title()}'
@@ -328,7 +565,7 @@ def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
         f'Seasonal Decomposition of {symbol} Time Series\n{timeframe}, Seasonality = 1 Year', fontsize=30)
     decomp_fig.tight_layout()
     decomp_fig.subplots_adjust(top=0.9)
-    plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_seasonal_decomp.png')
+    plt.savefig(f'{TOP}/images/{symbol}_{timeframe}_{freq}_seasonal_decomp.png')
 
 
 def train_test_split_data(df, train_size=80, verbose=0):
@@ -414,3 +651,4 @@ def model_stats(features, model, model_type, X_test, y_test, binary = False):
         ax[0].set_title(f'{model_type} Confusion Matrix', fontdict = {'fontsize': 14})
         plot_roc_curve(model, X_test, y_test, ax = ax[1])
         ax[1].set_title(f'{model_type} Receiver Operating Characteristic Curve', fontdict = {'fontsize': 14})
+    return

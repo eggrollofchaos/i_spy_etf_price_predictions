@@ -1,0 +1,2 @@
+Model,ARIMA_Order,Mod_Order,Trend,Intercept,Date,Fourier,Fourier_m,Fourier_k,BoxCox,Log,Scored,AIC,RMSE,RMSE%,SMAPE,CV_Time
+0,"(1, 1, 1)",0,c,True,True,True,252,2,False,False,True,29096.8702,3.2098,2.7838,0.7095,4577.3337
