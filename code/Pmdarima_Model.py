@@ -6,6 +6,8 @@ import numpy as np
 from itertools import product
 from functools import reduce
 import pickle as pkl
+from warnings import catch_warnings
+from warnings import filterwarnings
 
 import time
 import datetime
@@ -54,7 +56,7 @@ TOP = Path(__file__ + '../../..').resolve()
 NYSE = mcal.get_calendar('NYSE')
 CBD = pd.offsets.CustomBusinessDay(calendar=NYSE)
 
-print(f'Pmdarima_Model.py loaded from {TOP}/data..')
+# print(f'Pmdarima_Model.py loaded from {TOP}/data..')
 
 class Pmdarima_Model:
     def __init__(self, df, data_name, n, periods, freq, train_size=80, trend='c', with_intercept='auto',
@@ -163,18 +165,6 @@ class Pmdarima_Model:
         else:
             mod_pipe = None
             mod_params = None
-            # mod_params = 'ARIMA Order()'
-            # mod_params = mod_params.replace('()', self.mod_order)
-            # if not self.no_intercept:
-            #     mod_params += ', Intercept'
-            # if self.date:
-            #     mod_params += ', DateFeaturizer'
-            # if self.fourier:
-            #     mod_params += ', FourierFeaturizer'
-            # if self.box:
-            #     mod_params += ', BoxCoxEndogTransformer'
-            # if self.log:
-            #     mod_params += ', LogEndogTransformer'
 
         return mod_params, mod_pipe
 
@@ -183,17 +173,50 @@ class Pmdarima_Model:
         Helper function for pickling a model along with its params as a
         human-readable string.
         '''
-        # var = self.data_name.lower()
-        pkl_file = f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_{func}_best_model.pkl'
-        pkl_out = open(pkl_file, 'wb')
+        def __pickle_it(func_type='adhoc', verbose=1):
+            scores = (self.AIC, self.RMSE, self.RMSE_pc, self.SMAPE)
+            results = (self.y_hat, self.conf_ints)
+            # pkl_out = open(pkl_filepath, 'wb')
+            # mod_file = open(pkl_filepath,'wb')
+            if func_type == 'AutoARIMA':
+                pkl.dump((self.AA_best_params, self.AA_mod_pipe, self.AA_best_mod_params_df, scores, results), mod_file)
+            elif func_type == 'GridSearchCV':
+                pkl.dump((self.GS_best_params, self.GS_best_mod_pipe, self.GS_best_mod_params_df, scores, results), mod_file)
+            else: # func_type == 'adhoc'
+                pkl.dump((self.mod_params, self.mod_pipe, self.mod_params_df, scores, results), mod_file)
+            mod_file.close()
+
         if func == 'AA':
             func_type = 'AutoARIMA'
-            pkl.dump((self.AA_best_params, self.AA_mod_pipe), pkl_out)
-        if func == 'GS':
+        elif func == 'GS':
             func_type = 'GridSearchCV'
-            pkl.dump((self.GS_best_params, self.GS_best_mod_pipe), pkl_out)
-        print(f'Saved best {func_type} model as {pkl_file}') if verbose else None
-        pkl_out.close()
+        else: # func == 'adhoc':
+            func_type = 'adhoc'
+
+        # var = self.data_name.lower()
+        pkl_filepath = f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_{func}_best_model.pkl'
+        print(pkl_filepath)
+        if os.path.exists(pkl_filepath):
+            # mod_file = open("../models/TSY_10Y_Note_3Y_1D_GS_best_model.pkl",'rb')
+            mod_file = open(pkl_filepath,'r+b')
+            mod_data = pkl.load(mod_file)
+            try:
+                if self.RMSE < mod_data[3][2]:
+                    __pickle_it(func_type=func_type, verbose=verbose)
+                    print(f'Model outperforms existing best {func_type} model at {pkl_filepath}, overwriting.') if verbose else None
+                else:
+                    mod_file.close()
+                    print(f'Model did not outperform existing {func_type} model at {pkl_filepath}, not pickling model.') if verbose else None
+                    return
+            except IndexError:
+                __pickle_it(func_type=func_type, verbose=verbose)
+                print('Model file contains missing data, overwriting.') if verbose else None
+
+        else:
+            mod_file = open(pkl_filepath,'wb')
+            __pickle_it(func_type=func_type, verbose=verbose)
+            print(f'Saved best {func_type} model as {pkl_filepath}.') if verbose else None
+            return
 
     def __split_df_dates(self, train, test):
         '''
@@ -213,22 +236,32 @@ class Pmdarima_Model:
         self.X_train, self.y_train, self.X_test, self.y_test = self.__split_df_dates(self.df_train, self.df_test)
         # return self.X_train, self.y_train, self.X_test, self.y_test
 
-    def __fit_predict(self, model, days_fc, new_dates, index_fc, hist_dates_df, en_ex, new_dates_df=None, exog_df=None, verbose=1):
-        model.fit(self.df, hist_dates_df)
+    def __fit_predict(self, model, days_fc, new_dates, index_fc, hist_df, hist_dates_df, en_ex, new_dates_df=None, exog_df=None, verbose=1):
+        # model.fit(self.df, hist_dates_df)
         '''
         Helper function for fitting a model on the full input DataFrame and
         running an out of sample prediction.
+        For final predictions on endogenous variable, `hist_df` and `exog_df` must have 'date' as a column - function will convert if found as index instead.
         '''
-        print('Successfully fit model on historical observations.') if verbose else None
+        if en_ex == 'endo':
+            if type(exog_df.index) == pd.DatetimeIndex:
+                exog_df.reset_index(inplace=True)
+            if type(hist_df.index) == pd.DatetimeIndex:
+                hist_df.reset_index(inplace=True)
 
         if en_ex == 'exog':
+            model.fit(self.df, hist_dates_df)
+            print('Successfully fit model on historical observations.') if verbose else None
             y_hat, conf_ints = model.predict(X=new_dates_df, return_conf_int=True)
-            fc_df = pd.DataFrame(y_hat, index=index_fc, columns=[f'{self.data_name.lower()}'])
-            fc_date_df = pd.DataFrame(zip(new_dates, y_hat), index=index_fc, columns=['date', f'{self.data_name.lower()}'])
+            fc_df = pd.DataFrame(y_hat, index=index_fc, columns=[self.df.columns])
+            fc_date_df = pd.DataFrame(zip(new_dates, y_hat), index=index_fc, columns=['date', self.df.columns[0]])
             fc_date_df.set_index('date', inplace=True)
         elif en_ex == 'endo':
+            model.fit(y=self.df, X=hist_df)
+            print('Successfully fit model on historical observations.') if verbose else None
             y_hat, conf_ints = model.predict(X=exog_df, return_conf_int=True)
-            fc_date_df = pd.DataFrame(zip(new_dates, y_hat), index=index_fc, columns=['date', f'{self.data_name.lower()}'])
+            # results = model.predict(n_periods=days_fc, X=exog_df, return_conf_int=True)
+            fc_date_df = pd.DataFrame(zip(new_dates, y_hat), index=index_fc, columns=['date', self.df.columns[0]])
             fc_date_df.set_index('date', inplace=True)
             fc_df = fc_date_df
 
@@ -237,6 +270,8 @@ class Pmdarima_Model:
 
         # fc_df = pd.DataFrame(zip(self.new_dates_df.date.values,y_hat), columns=['date','close'])
         return fc_df, y_hat, conf_ints
+        # return fc_df, results
+        # return results
 
     # @classmethod
     # def get_next_dates(cls, today, df_size, days):
@@ -376,11 +411,14 @@ class Pmdarima_Model:
 
         mod_params_dict = {}
         mod_params_dict['ARIMA_Order'] = f'({p}, {d}, {q})'
+        mod_params_dict['Diffs'] = d
         mod_params_dict['Mod_Order'] = p+q
         mod_params_dict['Trend'] = t
         mod_params_dict['Intercept'] = with_intercept
         mod_params_dict['Date'] = date
         mod_params_dict['Fourier'] = fourier
+        # mod_params_dict['Fourier_m'] = int(f_m) if f_m else ''
+        # mod_params_dict['Fourier_k'] = int(k) if k else ''
         mod_params_dict['Fourier_m'] = f_m
         mod_params_dict['Fourier_k'] = k
         mod_params_dict['BoxCox'] = box
@@ -392,6 +430,12 @@ class Pmdarima_Model:
         mod_params_dict['SMAPE'] = None
         mod_params_dict['CV_Time'] = None
         mod_params_df = pd.DataFrame(mod_params_dict, index=[0])
+        # mod_params_dict['Fourier_m'] = mod_params_dict['Fourier_m'].map(int)
+        # mod_params_dict['Fourier_k'] = mod_params_dict['Fourier_k'].map(int)
+        # print(mod_params_df['Fourier_m'].dtypes, end=' ')
+        # mod_params_df['Fourier_m'] = pd.to_numeric(mod_params_df['Fourier_m'], downcast='integer')
+        # mod_params_df['Fourier_k'] = pd.to_numeric(mod_params_df['Fourier_k'], downcast='integer')
+        # print(mod_params_df['Fourier_m'].dtypes, end=' ')
         mod_params_df.index.name = 'Model'
         return mod_params, mod_params_df, pipe
 
@@ -402,6 +446,29 @@ class Pmdarima_Model:
         def __forecast_one_step(date_df):
             fc, conf_int = model.predict(X=date_df, return_conf_int=True)
             return fc.tolist()[0], conf_int[0].tolist()
+
+        def __run_CV_loop(n, new_obs, verbose=0):  # should be called iteratively
+            fc, conf = __forecast_one_step(date_df)
+            forecasts.append(fc)
+            conf_ints.append(conf)
+
+            # update the existing model with a small number of MLE steps
+            if dynamic:
+                model.update([fc], date_df)
+            elif not dynamic:
+                model.update([new_obs], date_df)
+
+            ## make a little animation
+            if verbose:
+                if n&1:
+                    print('>_', end='\r')
+                else:
+                    print('> ', end='\r')
+                # date = pd.DataFrame([X_test.iloc[0].date + CBD], index=[X_train.size]columns=['date'])
+            date_df.iloc[0].date += CBD
+            date_df.index += 1
+            # return forecasts, conf_ints
+
         if not model:
             model = self.AA_mod_pipe
             print('No model specified, defaulting to AutoARIMA best model.') if verbose else None
@@ -424,37 +491,39 @@ class Pmdarima_Model:
         if dynamic:
             dynamic_str = ' dynamically with forecasted values'
         if verbose:
-            print(f'Iteratively making predictions on {self.data_name} Time Series and updating model{dynamic_str}, beginning with first index of y_test ...')
+            print(f'Iteratively making predictions on \'{self.data_name}\' Time Series and updating model{dynamic_str}, beginning with first index of y_test ...')
         self.start = time.time()
-        for n, new_ob in enumerate(tqdm(self.y_test, desc='Step-Wise Prediction Loop')):
 
-            fc, conf = __forecast_one_step(date_df)
-
-                # print(e)
-                # print('Fitting on class variables X_train, y_train.')
-                # model.fit(self.y_train, self.X_train)
-                # self.fit_model(model)
-                # fc, conf = __forecast_one_step(date_df)
-            forecasts.append(fc)
-            conf_ints.append(conf)
-
-            # update the existing model with a small number of MLE steps
-            if dynamic:
-                model.update([fc], date_df)
-            elif not dynamic:
-                model.update([new_ob], date_df)
-
-            ## make a little animation
-            if n&1:
-                print('>_', end='\r')
-            else:
-                print('> ', end='\r')
-            # date = pd.DataFrame([X_test.iloc[0].date + CBD], index=[X_train.size]columns=['date'])
-            date_df.iloc[0].date += CBD
-            date_df.index += 1
-            # date += CBD
+        if verbose:
+            # results = [__run_CV_loop(n, new_obs) for n, new_obs in tqdm(self.y_test, desc='Step-Wise Prediction Loop')]
+            [__run_CV_loop(n, new_obs, verbose=verbose) for n, new_obs in enumerate(tqdm(self.y_test, desc='Step-Wise Prediction Loop'))]
+        else:
+            # results = [__run_CV_loop(n, new_obs) for n, new_obs in self.y_test]
+            [__run_CV_loop(n, new_obs, verbose=verbose) for n, new_obs in enumerate(self.y_test)]
+        print() if verbose else None
+        # for n, new_obs in enumerate(tqdm(self.y_test, desc='Step-Wise Prediction Loop')):
+        #     fc, conf = __forecast_one_step(date_df)
+        #     forecasts.append(fc)
+        #     conf_ints.append(conf)
+        #
+        #     # update the existing model with a small number of MLE steps
+        #     if dynamic:
+        #         model.update([fc], date_df)
+        #     elif not dynamic:
+        #         model.update([new_ob], date_df)
+        #
+        #     ## make a little animation
+        #     if n&1:
+        #         print('>_', end='\r')
+        #     else:
+        #         print('> ', end='\r')
+        #     # date = pd.DataFrame([X_test.iloc[0].date + CBD], index=[X_train.size]columns=['date'])
+        #     date_df.iloc[0].date += CBD
+        #     date_df.index += 1
+        #     # date += CBD
         self.end = time.time()
         print('Done.')
+        # forecast, conf_ints = results[0], results[1]
         # y_hat = pd.Series(forecasts, index=y_test.index)
         # self.conf_ints = conf_ints
         # self.y_hat = forecasts
@@ -463,15 +532,22 @@ class Pmdarima_Model:
         return forecasts, conf_ints
 
     def __GS_score_model(self, model, verbose=0, debug=False):
-        print('________________________________________________________________________')
-        print('\nStarting step-wise cross-validation...')
+        print('________________________________________________________________________\n') if verbose else None
+        print(f'Running step-wise cross-validation on model {self.GS_curr_mod_num} of {self.GS_mod_count}... ', end='')
         if verbose:
+            print()
             print(model[0])
             # print(model[1])
             print(model[2])
         # model[1].fit(self.y_train, self.X_train)
-        self.fit_model(model[2])
         result = None
+        try:
+            self.fit_model(model[2])
+        except Exception as e:
+            self.GS_curr_mod_num += 1
+            print(e) if verbose else None
+            print('Skipping model due to error.')
+            return
         # convert config to a key
         key = str(model[0])
         # print(key)
@@ -479,6 +555,7 @@ class Pmdarima_Model:
         # show all warnings and fail on exception if debugging
         if debug:
             # X_train, X_test, y_train, y_test, y_hat, conf_ints = self.__run_stepwise_CV(model[1])
+            print('Running in debug mode.') if verbose else None
             y_hat, conf_ints = self.__run_stepwise_CV(model[2], verbose=1, debug=debug)
             result = self.__get_model_scores(self.y_test, y_hat, self.y_train, model=model[2], debug=debug)
         else:
@@ -490,12 +567,19 @@ class Pmdarima_Model:
                     # X_train, X_test, y_train, y_test, y_hat, conf_ints = self.__run_stepwise_CV(model[1])
                     y_hat, conf_ints = self.__run_stepwise_CV(model[2], verbose=verbose)
                     result = self.__get_model_scores(self.y_test, y_hat, self.y_train, model=model[2], debug=0)
-            except:
-                error = None
+            except Exception as e:
+                print(e) if verbose else None
+                print('Error in step-wise CV, skipping model.')
+                result = None
+                self.GS_curr_mod_num += 1
+                return
+                # raise
                 # check for an interesting result
         if result:
+            print('Successfully completed step-wise CV on model.') if verbose else None
             print('Model[%s]: AIC=%.3f | RMSE=%.3f | RMSE_pc=%.3f%% | SMAPE=%.3f%%' % (key, *result))
             if result[1] < self.RMSE:
+                print('Updated class attributes for GridSearch performance.') if verbose else None
                 self.AIC = result[0]
                 self.RMSE = result[1]
                 self.RMSE_pc = result[2]
@@ -516,19 +600,23 @@ class Pmdarima_Model:
             model[1]['RMSE%'].values[0] = '%.4f' % (result[2])
             model[1]['SMAPE'].values[0] = '%.4f' % (result[3])
             model[1]['CV_Time'].values[0] = '%.4f' % (self.end-self.start)
-            # pd.concat([self.GS_all_mod_params_df,model[1]]).drop_duplicates(keep='last').reset_index(drop=True)
-            self.GS_all_mod_params_df = self.GS_all_mod_params_df.append(model[1])
-            self.GS_all_mod_params_df = self.GS_all_mod_params_df.drop_duplicates(keep='last')
-            self.GS_all_mod_params_df = self.GS_all_mod_params_df.reset_index(drop=True)
-            self.GS_all_mod_params_df.index.name = 'Model'
+
+            # replace existing line with new line + scores
+            scored_col_index = model[1].columns.get_loc('Scored')
+            for index, row in self.GS_all_mod_params_df.iterrows():
+                if row[0:scored_col_index].equals(model[1].iloc[0,0:scored_col_index]):
+                    self.GS_all_mod_params_df.iloc[index] = model[1]
+                    break
             csv_write_data(self.mod_CV_filepath, model[1], verbose=verbose)
-            print()
+            # if not verbose and not debug:
+            #     clear()
+            self.GS_curr_mod_num += 1
+            return (key, *result)
 
-        return (key, *result)
-
-    def __gridsearch_CV(self, min_order=0, max_order=6, max_d=1, t_list=['n','c','t','ct'],
-            with_intercept=False, f_m=None, k=None, date=True, fourier=True, box=False,
-            log=False, verbose=0, debug=False, parallel=True):
+    def __gridsearch_CV(self, min_p=0, max_p=10, min_q=0, max_q=10, min_d=0, max_d=2,
+            min_order=0, max_order=6, t_list=['n','c','t','ct'], with_intercept=False,
+            f_m=None, k=None, date=True, fourier=True, box=False, log=False,
+            verbose=0, debug=False, parallel=True):
         '''
         Heavily modified from https://machinelearningmastery.com/how-to-grid-search-sarima-model-hyperparameters-for-time-series-forecasting-in-python/
         '''
@@ -536,23 +624,11 @@ class Pmdarima_Model:
             f_m=self.f_m, k=self.k, date=True, fourier=True, box=False, log=False, verbose=0):
 
             print('Building list of models to test.') if verbose else None
-            # date_feat = pm.preprocessing.DateFeaturizer(
-            # column_name="date",  # the name of the date feature in the X matrix
-            # with_day_of_week=True,
-            # with_day_of_month=True)
-            # _, X_train_feats = date_feat.fit_transform(self.y_train, self.X_train)
 
-            columns = ['ARIMA_Order', 'Mod_Order', 'Trend', 'Intercept', 'Date', 'Fourier',
+            columns = ['ARIMA_Order', 'Diffs', 'Mod_Order', 'Trend', 'Intercept', 'Date', 'Fourier',
                         'Fourier_m', 'Fourier_k', 'BoxCox', 'Log',
                         'Scored', 'AIC', 'RMSE', 'RMSE%', 'SMAPE', 'CV_Time']
-            # arima_params = dict(
-            #     # d = self.n_diffs,
-            #     trace=3,
-            #     maxiter=200,
-            #     # stepwise=True,
-            #     # seasonal=False,
-            #     suppress_warnings=True)
-            # feats_list = 2**sum(box, log)
+
             if with_intercept == 'auto':
                 inter_iter = [True, False]
             else:
@@ -575,14 +651,15 @@ class Pmdarima_Model:
                 log = [log]
             feats_iter = list(itertools.product(date, fourier, box, log))
             models = []
-            count = 0
+            mod_count = 0
+            to_run_count = 0
             self.GS_all_mod_params_df = pd.DataFrame(columns=columns)
             self.GS_all_mod_params_df.index.name = 'Model'
             mod_params_dict = {}
-            for d in range(0, max_d+1):
+            for d in range(min_d, max_d+1):
                 mod_order = 0
-                for p in range(7):
-                    for q in range(7):
+                for p in range(min_p, max_p+1):
+                    for q in range(min_q, max_q+1):
                         mod_order = p+q
                         # print(mod_order)
                         if mod_order < min_order:
@@ -597,105 +674,47 @@ class Pmdarima_Model:
                             else:
                                 t_list_mod = ['n']
                             for t in t_list_mod:
-                                # mod_params = 'ARIMA()'
-                                # arima_order = (p, d, q)
-                                # mod_params_df.ARIMA = [(2,1,0)]
-                                # mod_params_df.Trend = [t]
-                                # order = f'({p}, {d}, {q})[\'{t}\']'
-                                # mod_params = mod_params.replace('()', order)
-                                # if verbose:
-                                    # print(f'Model Order = {order}', end = '')
-                                # if intercept:
-                                #     mod_params += ', Intercept'
-                                    # arima_params['with_intercept'] = intercept
-                                    # print(', Intercept', end='') if verbose else None
-                                # print() if verbose == 1 else None
-                                # mod_params += ', DateFeaturizer, FourierFeaturizer'
                                 for date, fourier, box, log in feats_iter:
-                                    f_m_mod = f_m
-                                    k_mod = k
+                                    f_m_mod = int(f_m)
+                                    k_mod = int(k)
                                     if not fourier:
                                         f_m_mod = None
                                         k_mod = None
-                                        # print(date, fourier, box, log)
-                                    # order = f'({p}, {d}, {q})'
-                                    # order_str = str(tuple(order))
-                                    # pipe_params = []
-                                    # if date == True: # always use DateFeaturizer if True
-                                    #     pipe_params.append(('date', date_feat))
-                                    #     mod_params += ', DateFeaturizer'
-                                    # if fourier == True: # always use FourierFeaturizer if True
-                                    #     pipe_params.append(('fourier', pm.preprocessing.FourierFeaturizer(m=self.f_m, k=4)))
-                                    #     mod_params += ', FourierFeaturizer'
-                                    # if feats == 0:
-                                    #     print('', end='')
-                                    # elif feats == 1:
-                                    # if box == True:
-                                    #     pipe_params.append(('box', pm.preprocessing.BoxCoxEndogTransformer()))
-                                    #     mod_params += ', BoxCoxEndogTransformer'
-                                    # elif feats == 1:
-                                    # if log == True:
-                                    #     pipe_params.append(('log', pm.preprocessing.LogEndogTransformer()))
-                                    #     mod_params += ', LogEndogTransformer'
-                                    # elif feats == 3:
-                                    #     pipe_params.append(('box', pm.preprocessing.BoxCoxEndogTransformer()))
-                                    #     pipe_params.append(('log', pm.preprocessing.LogEndogTransformer()))
-                                        # mod_params += ', BoxCoxEndogTransformer'
-                                        # mod_params += ', LogEndogTransformer'
-                                    # arima_params['order'] = arima_order
-                                    # arima_params['trend'] = t
-                                    # pipe_params.append(('arima', pm.arima.ARIMA(**arima_params)))
-                                    # pipe = pipeline.Pipeline(pipe_params)
-                                    # models.append((mod_params, pipe))
-                                    # mod_params_dict['ARIMA_Order'] = f'(p, d, q)'
-                                    # mod_params_dict['Trend'] = t
-                                    # mod_params_dict['Intercept'] = intercept
-                                    # mod_params_dict['Date'] = date
-                                    # mod_params_dict['Fourier'] = fourier
-                                    # mod_params_dict['Fourier_m'] = f_m
-                                    # mod_params_dict['Fourier_k'] = k
-                                    # mod_params_dict['BoxCox'] = box
-                                    # mod_params_dict['Log'] = log
-                                    # mod_params_dict['AIC'] = None
-                                    # mod_params_dict['RMSE'] = None
-                                    # mod_params_dict['RMSE%'] = None # (100*RMSE/y_train.mean()))
-                                    # mod_params_dict['SMAPE'] = None
-                                    # self.GS_mod_params_df.(f'{TOP}/model_scores/{self.ts}_{self.tf}_{self.f}_GS.csv')
                                     mod_params, mod_params_df, pipe = self.__setup_mod_params(
                                         p=p, d=d, q=q, t=t, with_intercept=intercept,
                                         f_m=f_m_mod, k=k_mod, date=date,
                                         fourier=fourier, box=box, log=log,
                                         func='GS', verbose=verbose)
+                                    mod_count += 1
                                     # print(mod_params)
-                                    # index = check_mod_score_exists(csv_filepath, mod_params_df)
-                                    # if index == True:  # model found and scored
-                                    #     continue
-                                    # elif index == False: # model params not have been logged in file
                                     # print(mod_params_df)
                                     index = csv_write_data(self.mod_CV_filepath, mod_params_df, verbose=verbose)
                                     if index == -1:  # model found and scored
-                                        print('Model already scored, skipping.') if verbose else None
+                                        print('Not adding model to test grid.') if verbose else None
                                         continue
                                     print('Added a model to test grid.') if verbose else None
                                     # or if model found but not scored, no need to write anything
                                     # otherwise, if model not found, write model params to csv
-
                                     self.GS_all_mod_params_df = self.GS_all_mod_params_df.append(mod_params_df)
+                                    self.GS_all_mod_params_df = self.GS_all_mod_params_df.reset_index(drop=True)
+                                    self.GS_all_mod_params_df.index.name = 'Model'
+                                    # print(self.GS_all_mod_params_df['Fourier_m'].dtypes)
                                     models.append((mod_params, mod_params_df, pipe))
-                                    count += 1
-            self.GS_mod_count = count
+                                    to_run_count += 1
+            self.GS_mod_count = to_run_count
             try:
-                assert(count > 0), 'Based on parameters given, 0 models built, terminating.'
+                assert(to_run_count > 0), f'Based on parameters given, 0 models built out of {mod_count} in grid, terminating.'
             except AssertionError as e:
                 print(e)
                 raise
-            print(f'Finished building list of {count} models.') if verbose else None
+            print(f'Finished building list of {to_run_count} models.') if verbose else None
             return models
             # print(models) if debug else None
 
         def __GS_start(models, verbose=0, debug=False, parallel=True):
 
             print('Starting iterative search through all GridSearch params.') if verbose else None
+            self.GS_curr_mod_num = 1
             scores = None
             # count = 0
 
@@ -715,10 +734,17 @@ class Pmdarima_Model:
                     # scores = pool.map(self.__GS_score_model, models) #, tqdm(models, desc='Model Loop'))
             else:
                 print('Running normally.')
-                scores = [self.__GS_score_model(model, debug=debug, verbose=verbose) for model in tqdm(models, desc='Model Loop')]
-                # scores = [self.__GS_score_model(model, debug=debug) for model in models]
+                try:
+                    if verbose:
+                        scores = [self.__GS_score_model(model, debug=debug, verbose=verbose) for model in tqdm(models, desc='Model Loop')]
+                    else:
+                        scores = [self.__GS_score_model(model, debug=debug, verbose=verbose) for model in models]
+                except Exception as e:
+                    print(e) if verbose else None
+                    print('Completed with some errors.') if verbose else None
+            # scores = [self.__GS_score_model(model, debug=debug) for model in models]
             # remove empty results
-            scores = [score for score in scores if score[1] != None]
+            scores = [score for score in scores if score != None]
             # # sort configs by error, asc
             scores.sort(key=lambda tup: tup[2])
             return scores
@@ -728,66 +754,21 @@ class Pmdarima_Model:
             f_m=f_m, k=k, date=date,
             fourier=fourier, box=box, log=log, verbose=verbose)
         scores = __GS_start(models, debug=debug, verbose=verbose, parallel=parallel)
-        print(scores)
+
         # clear()
-        if scores == 1:
-            return 1, 1
+        try:
+            assert(scores != None), "No valid scores returned."
+        except AssertionError as e:
+            print(e)
+            raise
         else:
-            print('GridsearchCV Completed.\n')
-            print('Top 10 models:')
-            for model, AIC, RMSE, RMSE_pc, SMAPE in scores[:10]:
-                print('Model[%s]: AIC=%.3f | RMSE=%.3f | RMSE%%=%.3f%% | SMAPE=%.3f%%' % (model, AIC, RMSE, RMSE_pc, SMAPE))
-            self.__pickle_model(func='GS', verbose=verbose)
             return self.GS_best_mod_pipe, scores
 
     def __run_auto_pipeline(self, show_summary=False, return_conf_int=False, verbose=1):
-        # pm.tsdisplay(self.df_train, lag_max=60, title = f'{self.data_name} Time Series Visualization') \
+        # display visualization of entire data set
         pm.tsdisplay(self.df, lag_max=60, title = f'{self.data_name} Time Series Visualization') \
             if show_summary else None
-        # X_train, y_train, X_test, y_test = self.__split_df_dates(self.df_train, self.df_test)
-        # self.X_train, self.X_test, self.y_train, self.y_test = self.__train_test_split_dates(self.df_train, self.df_test)
 
-        # params = []
-        # if self.date:
-        #     print('Using DateFeaturizer.') if verbose == 1 else None
-        #     date_feat = pm.preprocessing.DateFeaturizer(
-        #         column_name="date",  # the name of the date feature in the X matrix
-        #         with_day_of_week=True,
-        #         with_day_of_month=True)
-        #     _, X_train_feats = date_feat.fit_transform(self.y_train, self.X_train)
-        #     # _, X_train_feats = date_feat.fit_transform(y_train[:,0], X_train)
-        #     params.append(('date', date_feat))
-        # if self.fourier:
-        #     print('Using FourierFeaturizer.') if verbose == 1 else None
-        #     params.append(('fourier', pm.preprocessing.FourierFeaturizer(m=self.f_m, k=4)))
-        # if self.box:
-        #     print('Using BoxCoxEndogTransformer.') if verbose == 1 else None
-        #     params.append(('box', pm.preprocessing.BoxCoxEndogTransformer()))
-        # if self.log:
-        #     print('Using LogEndogTransformer.') if verbose == 1 else None
-        #     params.append(('log', pm.preprocessing.LogEndogTransformer()))
-        # arima_params = dict(
-        #     d = self.n_diffs,
-        #     trace=3,
-        #     maxiter=200,
-        #     stepwise=True,
-        #     suppress_warnings=True)
-        # if self.fit_seas:
-        #     arima_params['seasonal']=True
-        #     arima_params['m']=self.m
-        #     arima_params['max_p']=0
-        #     arima_params['start_p']=0
-        #     arima_params['max_q']=0
-        #     arima_params['start_q']=0
-        #     arima_params['max_P']=0
-        #     arima_params['start_P']=0
-        #     arima_params['max_Q']=0
-        #     arima_params['start_Q']=0
-        #     arima_params['start_params']=np.asarray([0, 0, 0, 0, 0, 0, 0, 0, 1])
-        #     arima_params['D']=self.ns_diffs
-        # elif not self.fit_seas:
-        #     arima_params['seasonal']=False
-        # params.append(('arima', pm.arima.AutoARIMA(**arima_params)))
         AA_mod_params, AA_mod_params_df, AA_pipe = self.__setup_mod_params(d=self.n_diffs, D=self.ns_diffs,
             with_intercept=self.with_intercept, m=self.m, f_m=self.f_m, k=self.k,
             date=self.date, fourier=self.fourier, box=self.box, log=self.log,
@@ -796,17 +777,9 @@ class Pmdarima_Model:
         if verbose:
             print(f'Parameters for AutoARIMA Pipeline: \n  {AA_mod_params}') if verbose else None
             print(AA_pipe, '\n')
-        # pipe = pipeline.Pipeline(mod_pipe)
 
-        # pipe.fit(y_train, X_train)
-        # print(AA_mod_params_df)
-        # if True:
-        #     raise Exception("Testing.")
         self.fit_model(AA_pipe, func='AA')
 
-        # save best params
-        # pipe_params = [(name, transform) for name, transform in pipe.named_steps.items()]
-        self.__pickle_model(func='AA', verbose=verbose)
         best_arima = AA_pipe.named_steps['arima'].model_.order
         best_seas = AA_pipe.named_steps['arima'].model_.seasonal_order if self.fit_seas else ''
         AA_mod_params = AA_mod_params.replace('AutoARIMA', f'ARIMA{best_arima}{best_seas}')
@@ -834,10 +807,7 @@ class Pmdarima_Model:
         if self.fourier:
             self.f_m = AA_pipe.named_steps['fourier'].m
             self.k = AA_pipe.named_steps['fourier'].k
-        print(f'Best params:\n  {self.AA_best_params}')
-        # print(self.AA_mod_pipe)
-        # run prediction on test set
-        # conf_ints = []
+
         if return_conf_int:
             self.y_hat, self.conf_ints = self.AA_mod_pipe.predict(X=self.X_test, return_conf_int=return_conf_int)
         elif not return_conf_int:
@@ -851,7 +821,8 @@ class Pmdarima_Model:
         Plot Test vs Predict with optional confidence intervals
         '''
         conf = ''
-        ylabel=self.data_name
+        if ylabel == None:
+            ylabel = self.data_name
         fig, ax = plt.subplots(figsize=(16, 8))
         ax.plot(self.X_train, self.y_train, color='blue', alpha=0.5, label='Training Data')
         ax.plot(self.X_test, self.y_hat, color='green', marker=',', alpha=0.7, label='Predicted')
@@ -863,17 +834,21 @@ class Pmdarima_Model:
                      conf_int[:, 0], conf_int[:, 1],
                      alpha=0.5, color='orange',
                      label="Confidence Intervals")
-        ax.legend(loc='upper left', borderaxespad=0.5)
-        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Test vs Predict with Confidence Interals\n', size=24)
-        ax.set_ylabel(ylabel, size=14)
+        ax.legend(loc='upper left', borderaxespad=0.5, prop={"size":16})
+        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Test vs Predict with Confidence Interals\n', size=26)
+        ax.set_ylabel(ylabel, size=18)
+        ax.set_xlabel(ax.get_xlabel(), size=18)
+        tick_params = dict(size=4, width=1.5, labelsize=16)
+        ax.tick_params(axis='y', **tick_params)
+        ax.tick_params(axis='x', **tick_params)
         if func == 'AA':
-            ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=16)
+            ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=24)
             plt.savefig(f'{TOP}/images/AutoArima/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
         elif func == 'GS':
-            ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=16)
+            ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=24)
             plt.savefig(f'{TOP}/images/GridSearch/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
         else:
-            ax.set_title(f'Parameters: {self.mod_params}', size=16)
+            ax.set_title(f'Parameters: {self.mod_params}', size=24)
             plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
 
     def plot_forecast_conf(self, ohlc_df=None, hist_df=None, y_hat=None, conf_ints=True, days_fc=5,
@@ -888,8 +863,10 @@ class Pmdarima_Model:
         if fin:
             mpl.plot(ohlc_df[-lookback:], type='candle', style="yahoo", ax=ax)
             ax.plot(range(lookback, lookback+days_fc), y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
-            ax.set_xlim(0, lookback+lookback//10)
+            # ax.set_xlim(0, lookback+lookback//10)
+            ax.set_xlim(0, lookback+days_fc+5)
             equidate_ax(fig, ax, self.df_with_fc[-lookback-days_fc:].index.date)
+            ax.set_xlabel(f'Date', size=20)
         else:
             ax.plot(hist_df[-lookback:], color='blue', alpha=0.5, label='Historical')
             ax.plot(self.new_dates, y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
@@ -898,7 +875,7 @@ class Pmdarima_Model:
             ax.set_ylim(0, y_max)
         if conf_ints:
             conf = '_Conf'
-            conf_int = np.asarray(self.conf_ints)
+            conf_int = np.asarray(self.fc_conf_ints)
             if fin:
                 ax.fill_between(range(lookback, lookback+days_fc),
                 conf_int[:, 0], conf_int[:, 1],
@@ -909,30 +886,25 @@ class Pmdarima_Model:
                 conf_int[:, 0], conf_int[:, 1],
                 alpha=0.3, facecolor='orange',
                 label="Confidence Intervals")
-        ax.set_ylabel(f'{ylabel} (USD)', size=14)
+        ax.set_ylabel(f'{ylabel} (USD)', size=20)
         fig.subplots_adjust(top=0.92)
         ax.tick_params(axis='both', which='major', labelsize=16)
         ax.tick_params(axis='both', which='minor', labelsize=16)
-        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Historical vs Forecast with Confidence Interals\n', size=24)
-        ax.legend(loc='upper left', borderaxespad=0.5)
+        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Historical vs Forecast with Confidence Interals\n', size=30)
+        ax.legend(loc='upper left', borderaxespad=0.5, prop={"size":20})
         if func == 'AA':
-            ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=16)
+            ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=24)
             plt.savefig(f'{TOP}/images/AutoArima/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
         elif func == 'GS':
-            ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=16)
+            ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=24)
             plt.savefig(f'{TOP}/images/GridSearch/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
         else:
-            ax.set_title(f'Parameters: {self.mod_params}', size=16)
-            plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
+            ax.set_title(f'Parameters: {self.mod_params}', size=24)
+            plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
 
 
 
     def __get_model_scores(self, y_test, y_hat, y_train, model, verbose=0, debug=False):
-        # pipe = self.mod_pipe
-        # if type(pipe.named_steps['arima']=='pm.ARIMA'):
-        #     AIC = pipe.named_steps['arima'].aic()
-        # elif type(pipe.named_steps['arima']=='pm.AutoARIMA'):
-        #     AIC = pipe.named_steps['arima'].model_.aic()
         try:
             AIC = model.named_steps['arima'].aic()
         except AttributeError:
@@ -961,11 +933,72 @@ class Pmdarima_Model:
             # in case not already fit
             self.fit_model(model)
         elif func == 'adhoc':
+            mod_params_df = self.mod_params_df
             if not model:
                 model = self.mod_pipe
-            mod_params_df = self.mod_params_df
+            else:
+                if type(model.named_steps['arima'])==pm.AutoARIMA:
+                    arima_order = model.named_steps['arima'].model_.order
+                    with_intercept = model.named_steps['arima'].model_.with_intercept
+                    trend = model.named_steps['arima'].model_.trend
+                    # if this was an AutoARIMA pipe, replace AutoARIMA with ARIMA
+                    # so that we don't have to do the AA search again
+                    arima_params = model.named_steps['arima'].get_params()
+                    arima_params['order'] = arima_order
+                    arima_params['with_intercept'] = with_intercept
+                    arima_params['trend'] = trend
+                    arima_model = pm.arima.ARIMA(**arima_params)
+
+                    model.steps[-1]=('arima', arima_model)
+                    model = pm.pipeline.Pipeline(model.steps)
+                else:
+                    arima_order = model.named_steps['arima'].order
+                    with_intercept = model.named_steps['arima'].with_intercept
+                    trend = model.named_steps['arima'].trend
+                mod_params_df['ARIMA_Order'] = str(arima_order)
+                mod_params_df['Mod_Order'] = arima_order[0] + arima_order[2]
+                mod_params_df['Trend'] = trend
+                mod_params_df['Intercept'] = with_intercept
+                try:
+                    model.named_steps['date']
+                except KeyError:
+                    mod_params_df['Date'] = False
+                else:
+                    mod_params_df['Date'] = True
+
+                m_list = []
+                k_list = []
+                for i, j in model.named_steps.items():
+                    if str(j)[:7]=='Fourier':
+                        m_list.append(model.named_steps[i].m)
+                        k_list.append(model.named_steps[i].k)
+                m_str = ', '.join([str(m) for m in m_list])
+                k_str = ', '.join([str(k) for k in k_list])
+                if m_str:
+                    mod_params_df['Fourier'] = True
+                    mod_params_df['Fourier_m'] = m_str
+                    mod_params_df['Fourier_k'] = k_str
+                else:
+                    mod_params_df['Fourier'] = False
+
+                try:
+                    model.named_steps['box']
+                except KeyError:
+                    mod_params_df['BoxCox'] = False
+                else:
+                    mod_params_df['BoxCox'] = True
+                try:
+                    model.named_steps['log']
+                except KeyError:
+                    mod_params_df['Log'] = False
+                else:
+                    mod_params_df['Log'] = True
+            if verbose == 1:
+                print('Explict model pipe passed: \n', mod_params_df)
+                print('Pipeline: \n', model)
             # in case not already fit
             self.fit_model(model)
+
         if verbose:
             if func == 'AA':
                 print(self.AA_best_params)
@@ -976,20 +1009,17 @@ class Pmdarima_Model:
                 print(self.GS_best_mod_pipe)
                 model_str = ' on best model from GridSearch.'
             elif func == 'adhoc':
-                print(self.mod_params)
-                print(self.mod_pipe)
+                # print(self.mod_params)
+                # print(self.mod_pipe)
                 model_str = ' on adhoc model.'
 
             print(f'Starting step-wise cross-validation{model_str}...')
         # X_train, y_train, X_test, y_test, y_hat, conf_ints = self.__run_stepwise_CV(model=model, dynamic=dynamic)
 
-        y_hat, conf_ints = self.__run_stepwise_CV(model=model, dynamic=dynamic)
+        y_hat, conf_ints = self.__run_stepwise_CV(model=model, dynamic=dynamic, verbose=verbose)
         self.y_hat = y_hat
         self.conf_ints = conf_ints
         self.AIC, self.RMSE, self.RMSE_pc, self.SMAPE = self.__get_model_scores(self.y_test, self.y_hat, self.y_train, model=model, verbose=verbose)
-        # self.AIC = AIC
-        # self.RMSE = RMSE
-        # self.SMAPE = SMAPE
         mod_params_df['Scored'].values[0] = True
         mod_params_df['AIC'].values[0] = '%.4f' % (self.AIC)
         mod_params_df['RMSE'].values[0] = '%.4f' % (self.RMSE)
@@ -998,10 +1028,13 @@ class Pmdarima_Model:
         mod_params_df['CV_Time'].values[0] = '%.4f' % (self.end-self.start)
         if func == 'AA':
             self.AA_best_mod_params_df = mod_params_df
+            self.__pickle_model(func='AA', verbose=verbose)
         if func == 'GS':
             self.GS_best_mod_params_df = mod_params_df
+            self.__pickle_model(func='GS', verbose=verbose)
         if func == 'adhoc':
             self.mod_params_df = mod_params_df
+            self.__pickle_model(func='adhoc', verbose=verbose)
         index = csv_write_data(self.mod_CV_filepath, mod_params_df, verbose=verbose)
         print()
 
@@ -1018,11 +1051,14 @@ class Pmdarima_Model:
         self.AA_best_params, self.AA_mod_pipe = self.__reset_mod_params()
         # X_train, y_train, X_test, y_test, y_hat, conf_ints = \
         self.__run_auto_pipeline(show_summary=show_summary, return_conf_int=return_conf_int, verbose=verbose)
+        print(f'Best params:\n  {self.AA_best_params}')
+
+        # save best params
+        # pipe_params = [(name, transform) for name, transform in pipe.named_steps.items()]
+        # self.__pickle_model(func='AA', verbose=verbose)
+
         self.AIC, self.RMSE, self.RMSE_pc, self.SMAPE = \
             self.__get_model_scores(self.y_test, self.y_hat, self.y_train, model=self.AA_mod_pipe, verbose=verbose)
-        # self.AIC = AIC
-        # self.RMSE = RMSE
-        # self.SMAPE = SMAPE
         if visualize:
             # self.plot_test_predict(y_hat, ylabel=self.data_name, func='AA')
             self.plot_test_predict(self.y_hat, conf_ints=return_conf_int, ylabel=self.data_name, func='AA')
@@ -1031,34 +1067,62 @@ class Pmdarima_Model:
         # return df_train, df_test, exog_train, exog_test
         # return X_train, X_test, exog_train, exog_test
 
-    def run_gridsearch_CV(self, min_order=0, max_order=6, max_d=1, t_list=['n','c','t','ct'],
+    def run_gridsearch_CV(self, min_p=0, max_p=10, min_q=0, max_q=10, min_d=0, max_d=2,
+            min_order=0, max_order=6, t_list=['n','c','t','ct'],
             with_intercept='auto', f_m=None, k=None, date=True, fourier=True, box=False, log=False,
             visualize=True, return_conf_int=True, verbose=1, debug=False, parallel=True):
-        if verbose:
-            print('Starting GridSearchCV...')
+        print('Setting up GridSearchCV...')
         self.GS_best_params, self.GS_best_mod_pipe = self.__reset_mod_params()
         if not f_m:
             f_m = self.f_m
         if not k:
             k = self.k
-        best_model, scores = self.__gridsearch_CV(min_order=min_order, max_order=max_order,
-            max_d=max_d, t_list=t_list, with_intercept=with_intercept, f_m=f_m, k=k,
-            date=date, fourier=fourier, box=box, log=log,
+        best_model, scores = self.__gridsearch_CV(min_p=min_p, max_p=max_p,
+            min_q=min_q, max_q=max_q, min_d=min_d, max_d=max_d, min_order=min_order,
+            max_order=max_order, t_list=t_list, with_intercept=with_intercept,
+            f_m=f_m, k=k, date=date, fourier=fourier, box=box, log=log,
             verbose=verbose, debug=debug, parallel=parallel)
-        if best_model == 1:
-            return None, None
+
+        if scores:
+            print('GridsearchCV Completed.\n')
+            print('Top 10 models from this run:')
+            for model, AIC, RMSE, RMSE_pc, SMAPE in scores[:10]:
+                print('Model[%s]: AIC=%.3f | RMSE=%.3f | RMSE%%=%.3f%% | SMAPE=%.3f%%' % (model, AIC, RMSE, RMSE_pc, SMAPE))
+            self.__pickle_model(func='GS', verbose=verbose)
+        else:
+            print('No models were scored this run.')
+            pkl_filepath = f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_GS_best_model.pkl'
+            print(f'Loading best model from {pkl_filepath}.')
+            mod_file = open(pkl_filepath,'rb')
+            mod_data = pkl.load(mod_file)
+            mod_file.close()
+
+            self.GS_best_params = mod_data[0]
+            self.GS_best_mod_pipe = mod_data[1]
+            self.GS_best_mod_params_df = mod_data[2]
+
+            try:
+                self.y_hat = mod_data[4][0]
+                self.conf_ints = mod_data[4][1]
+            except Exception as e:
+                self.fit_model(self.GS_best_mod_pipe, func='GS')
+                self.y_hat, self.conf_ints = self.__run_stepwise_CV(self.GS_best_mod_pipe, verbose=verbose)
+
         if visualize:
             # self.plot_test_predict(self.y_hat, conf_ints=conf_ints, ylabel=self.data_name, func='GS')
             self.plot_test_predict(self.y_hat, conf_ints=return_conf_int, ylabel=self.data_name, func='GS')
         return best_model, scores
 
-    def run_prediction(self, model, days_fc, en_ex, exog_df=None, visualize=True,
+    def run_prediction(self, model, days_fc, en_ex, exog_df=None, visualize=True, lookback=120,
                         fin=False, ohlc_df=None, hist_df=None, func='GS',
                         return_conf_int=True, verbose=1):
         '''
         Out of sample predictions. Needs n separate Pmdarima_Model objects, one
         for each variable. Run predictions on Exogenous variables first,
         then run on Endogenous variable.
+        If `en_ex` == 'endo', `exog_df` and 'hist_df' must be provided.
+        hist_df : historical observations of all variables
+        exog_df : exogenous variable for running final predictions
         '''
         try:
             assert(en_ex in ('endo', 'exog')), "Incorrect parameters passed for 'endo'/'exog' switch."
@@ -1067,13 +1131,18 @@ class Pmdarima_Model:
             print('Failed to initialize.')
             raise
 
-        try:
-            assert(type(df) in (pd.Series, pd.DataFrame)), "Data is not of type Pandas Series or DataFrame."
-            assert(type(df.index) == (pd.DatetimeIndex)), "Data index is not of type Pandas DatetimeIndex."
-        except AssertionError as e:
-            print(e)
+        if en_ex == 'exog':
             hist_df = self.df
-            print('Using class variable \'df\' - original DataFrame.')
+
+        # try:
+        #     assert(type(hist_df) in (pd.Series, pd.DataFrame)), "Historical exog data is not of type Pandas Series or DataFrame."
+        #     # assert(type(hist_df) == (pd.DatetimeIndex)), "Historical data index is not of type Pandas DatetimeIndex."
+        # except AssertionError as e:
+        #     # print(e)
+        #     hist_df = pd.DataFrame(hist_df.index, columns=['date'])
+        #     print('Using class variable \'df\' - original DataFrame.')
+
+        self.hist_df = hist_df
 
         if not model:
             model = self.AA_mod_pipe
@@ -1086,7 +1155,7 @@ class Pmdarima_Model:
                 var = 'Endogenous'
             print(f'Running Fit and Predict on {var} variable {self.data_name}...')
 
-        self.exog_dg = exog_df
+        self.exog_df = exog_df
         self.days_fc = days_fc
 
         today = self.df.index[-1]
@@ -1100,14 +1169,16 @@ class Pmdarima_Model:
         # note that the fc_dt returned for exogenous data does not include date
         self.fc_df, self.y_fc_hat, self.fc_conf_ints = \
             self.__fit_predict(model, self.days_fc, self.new_dates,
-            self.index_fc, self.hist_dates_df, en_ex, self.new_dates_df, self.exog_df, verbose)
+            self.index_fc, self.hist_df, self.hist_dates_df, en_ex, self.new_dates_df, self.exog_df, verbose)
+        # self.fc_df, self.results = \
+        # self.results = \
         # self.fc_df = fc_df
         # self.y_hat = y_hat
         # self.conf_ints = conf_ints
 
         if visualize:
             if fin:
-                self.plot_forecast_conf(ohlc_df=ohlc_df, y_hat=self.y_fc_hat,
+                self.plot_forecast_conf(ohlc_df=ohlc_df, y_hat=self.y_fc_hat, lookback=lookback,
                 conf_ints=return_conf_int, func=func, fin=fin, days_fc=self.days_fc)
             else:
                 self.plot_forecast_conf(hist_df=hist_df, y_hat=self.y_fc_hat,
