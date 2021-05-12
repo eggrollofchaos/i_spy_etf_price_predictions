@@ -42,7 +42,10 @@ munits.registry[np.datetime64] = converter
 munits.registry[datetime.date] = converter
 munits.registry[datetime.datetime] = converter
 
-font = {'size'   : 12}
+font = {'family' : 'sans-serif',
+        'sans-serif' : 'Tahoma', # Verdana
+        'weight' : 'normal',
+        'size'   : '16'}
 matplotlib.rc('font', **font)
 
 pd.set_option('display.max_columns',None)
@@ -61,9 +64,9 @@ CBD = pd.offsets.CustomBusinessDay(calendar=NYSE)
 class Pmdarima_Model:
     def __init__(self, df, data_name, n, periods, freq, train_size=80, trend='c', with_intercept='auto',
                 order=(0,1,0), s_order=(0,0,0), seas=0, fit_seas=False, f_seas=252, k=4,
-                estimate_diffs=False, impute=False, AA_d=None, AA_D=None, verbose=1,
+                estimate_diffs=False, impute=False, AA_d=None, AA_D=None,
                 #max_d=2, max_p=2, max_q=2, max_D=2, max_P=2, max_Q=2,
-                date=True, fourier=True, box=False, log=False):
+                date=True, fourier=True, box=False, log=False, verbose=1):
 
         try:
             assert(type(df) in (pd.Series, pd.DataFrame)), "Data is not of type Pandas Series or DataFrame."
@@ -85,8 +88,8 @@ class Pmdarima_Model:
             self.df = pd.DataFrame(df)
         if impute:
             self.df = df.interpolate()
-        # else:
-        #     self.df = df
+        else:
+            self.df = df
         self.hist_dates_df = pd.DataFrame(self.df.index, columns=['date'])
         self.train_size = train_size
         self.df_train, self.df_test = pm.model_selection.train_test_split(self.df,
@@ -168,53 +171,82 @@ class Pmdarima_Model:
 
         return mod_params, mod_pipe
 
+    @staticmethod
+    def __unpickle_model(ts, tf, f, func='GS'):
+        pkl_filepath = Pmdarima_Model.__get_pkl_filepath(ts, tf, f, func=func)
+        print(f'Loading best model from {pkl_filepath}.')
+        mod_file = open(pkl_filepath,'rb')
+        mod_data = pkl.load(mod_file)
+        mod_file.close()
+
+        return mod_data
+
+    @staticmethod
+    def __get_pkl_filepath(ts, tf, f, func='GS'):
+        # pkl_filepath = f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_{func}_best_model.pkl'
+        pkl_filepath = f'{TOP}/models/{ts}_{tf}_{f}_{func}_best_model.pkl'
+
+        return pkl_filepath
+
     def __pickle_model(self, func='AA', verbose=1):
         '''
         Helper function for pickling a model along with its params as a
         human-readable string.
         '''
-        def __pickle_it(func_type='adhoc', verbose=1):
-            scores = (self.AIC, self.RMSE, self.RMSE_pc, self.SMAPE)
-            results = (self.y_hat, self.conf_ints)
-            # pkl_out = open(pkl_filepath, 'wb')
-            # mod_file = open(pkl_filepath,'wb')
-            if func_type == 'AutoARIMA':
-                pkl.dump((self.AA_best_params, self.AA_mod_pipe, self.AA_best_mod_params_df, scores, results), mod_file)
-            elif func_type == 'GridSearchCV':
-                pkl.dump((self.GS_best_params, self.GS_best_mod_pipe, self.GS_best_mod_params_df, scores, results), mod_file)
-            else: # func_type == 'adhoc'
-                pkl.dump((self.mod_params, self.mod_pipe, self.mod_params_df, scores, results), mod_file)
+        def __pickle_it(params, pipe, params_df, scores, results, func_type='adhoc', verbose=1):
+            mod_file = open(pkl_filepath,'wb')
+            pkl.dump((params, pipe, params_df, scores, results), mod_file)
+            # if func_type == 'AutoARIMA':
+                # pkl.dump((self.AA_best_params, self.AA_mod_pipe, self.AA_best_mod_params_df, scores, results), mod_file)
+            # elif func_type == 'GridSearchCV':
+            #     pkl.dump((self.GS_best_params, self.GS_best_mod_pipe, self.GS_best_mod_params_df, scores, results), mod_file)
+            # else: # func_type == 'adhoc'
+            #     pkl.dump((self.mod_params, self.mod_pipe, self.mod_params_df, scores, results), mod_file)
             mod_file.close()
 
+        scores = (self.AIC, self.RMSE, self.RMSE_pc, self.SMAPE)
+        results = (self.y_hat, self.conf_ints)
         if func == 'AA':
             func_type = 'AutoARIMA'
+            params = self.AA_best_params
+            pipe = self.AA_mod_pipe
+            params_df = self.AA_best_mod_params_df
         elif func == 'GS':
             func_type = 'GridSearchCV'
+            params = self.GS_best_params
+            pipe = self.GS_best_mod_pipe
+            params_df = self.GS_best_mod_params_df
         else: # func == 'adhoc':
             func_type = 'adhoc'
+            params = self.mod_params
+            pipe = self.mod_pipe
+            params_df = self.mod_params_df
 
         # var = self.data_name.lower()
-        pkl_filepath = f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_{func}_best_model.pkl'
-        print(pkl_filepath)
+        # pkl_filepath = __get_pkl_filepath(func='GS')
+        # f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_{func}_best_model.pkl'
+        pkl_filepath = Pmdarima_Model.__get_pkl_filepath(self.ts, self.tf, self.f, func=func)
+
         if os.path.exists(pkl_filepath):
             # mod_file = open("../models/TSY_10Y_Note_3Y_1D_GS_best_model.pkl",'rb')
-            mod_file = open(pkl_filepath,'r+b')
-            mod_data = pkl.load(mod_file)
+            # mod_file = open(pkl_filepath,'r+b')
+            # mod_data = pkl.load(mod_file)
+            mod_data = Pmdarima_Model.__unpickle_model(self.ts, self.tf, self.f, func=func)
             try:
                 if self.RMSE < mod_data[3][2]:
-                    __pickle_it(func_type=func_type, verbose=verbose)
+                    __pickle_it(params, pipe, params_df, scores, results, func_type, verbose)
                     print(f'Model outperforms existing best {func_type} model at {pkl_filepath}, overwriting.') if verbose else None
                 else:
-                    mod_file.close()
+                    # mod_file.close()
                     print(f'Model did not outperform existing {func_type} model at {pkl_filepath}, not pickling model.') if verbose else None
                     return
             except IndexError:
-                __pickle_it(func_type=func_type, verbose=verbose)
+                __pickle_it(params, pipe, params_df, scores, results, func_type, verbose)
                 print('Model file contains missing data, overwriting.') if verbose else None
 
         else:
             mod_file = open(pkl_filepath,'wb')
-            __pickle_it(func_type=func_type, verbose=verbose)
+            __pickle_it(params, pipe, params_df, scores, results, func_type, verbose)
             print(f'Saved best {func_type} model as {pkl_filepath}.') if verbose else None
             return
 
@@ -276,7 +308,7 @@ class Pmdarima_Model:
     # @classmethod
     # def get_next_dates(cls, today, df_size, days):
     @staticmethod
-    def get_next_dates(today, df_size, days_fc):
+    def __get_next_dates(today, df_size, days_fc):
         '''
         Static method for getting new dates for out of sample predictions.
         Returns a list of Pandas Timestamps, a list of numerical indices extending
@@ -594,6 +626,8 @@ class Pmdarima_Model:
                     self.GS_first_mod = False
                 else:
                     print('Next best model found, RMSE=%.3f' % result[1])
+                # pickle model
+                self.__pickle_model(func='GS', verbose=verbose)
             model[1]['Scored'].values[0] = True
             model[1]['AIC'].values[0] = '%.4f' % (result[0])
             model[1]['RMSE'].values[0] = '%.4f' % (result[1])
@@ -614,20 +648,42 @@ class Pmdarima_Model:
             return (key, *result)
 
     def __gridsearch_CV(self, min_p=0, max_p=10, min_q=0, max_q=10, min_d=0, max_d=2,
-            min_order=0, max_order=6, t_list=['n','c','t','ct'], with_intercept=False,
-            f_m=None, k=None, date=True, fourier=True, box=False, log=False,
-            verbose=0, debug=False, parallel=True):
+        min_order=0, max_order=6, t_list=['n','c','t','ct'], with_intercept=False,
+        f_m=None, k=None, date=True, fourier=True, box=False, log=False,
+        max_models=0, verbose=0, debug=False, parallel=True):
         '''
         Heavily modified from https://machinelearningmastery.com/how-to-grid-search-sarima-model-hyperparameters-for-time-series-forecasting-in-python/
         '''
-        def __GS_setup_params(t_list=['n','c','t','ct'], with_intercept='auto',
-            f_m=self.f_m, k=self.k, date=True, fourier=True, box=False, log=False, verbose=0):
-
+        def __GS_setup_params(min_p=0, max_p=10, min_q=0, max_q=10, min_d=0, max_d=2,
+                min_order=0, max_order=6, t_list=['n','c','t','ct'], with_intercept=False,
+                f_m=f_m, k=k, date=True, fourier=True, box=False, log=False,
+                max_models=0, verbose=0):
+        # def __GS_setup_params():
             print('Building list of models to test.') if verbose else None
+
+            mod_count, to_run_count, models = \
+                __GS_build_grid(min_p, max_p, min_q, max_q, min_d, max_d,
+                    min_order, max_order, t_list, with_intercept, f_m, k,
+                    date, fourier, box, log, max_models, verbose)
+            self.GS_mod_count = to_run_count
+            try:
+                assert(to_run_count > 0), f'Based on parameters given, 0 models built out of {mod_count} in grid, terminating.'
+            except AssertionError as e:
+                print(e)
+                raise
+            print(f'Finished building list of {to_run_count} models.') if verbose else None
+            return models
+            # print(models) if debug else None
+
+        def __GS_build_grid(min_p, max_p, min_q, max_q, min_d, max_d,
+                min_order, max_order, t_list, with_intercept, f_m, k,
+                date, fourier, box, log, max_models, verbose):
 
             columns = ['ARIMA_Order', 'Diffs', 'Mod_Order', 'Trend', 'Intercept', 'Date', 'Fourier',
                         'Fourier_m', 'Fourier_k', 'BoxCox', 'Log',
                         'Scored', 'AIC', 'RMSE', 'RMSE%', 'SMAPE', 'CV_Time']
+            self.GS_all_mod_params_df = pd.DataFrame(columns=columns)
+            self.GS_all_mod_params_df.index.name = 'Model'
 
             if with_intercept == 'auto':
                 inter_iter = [True, False]
@@ -649,19 +705,18 @@ class Pmdarima_Model:
                 log = list(set([True, False]))[::-1]
             else:
                 log = [log]
+
             feats_iter = list(itertools.product(date, fourier, box, log))
             models = []
             mod_count = 0
             to_run_count = 0
-            self.GS_all_mod_params_df = pd.DataFrame(columns=columns)
-            self.GS_all_mod_params_df.index.name = 'Model'
             mod_params_dict = {}
             for d in range(min_d, max_d+1):
+                # print(max_models, to_run_count)
                 mod_order = 0
                 for p in range(min_p, max_p+1):
                     for q in range(min_q, max_q+1):
                         mod_order = p+q
-                        # print(mod_order)
                         if mod_order < min_order:
                             continue
                         if mod_order > max_order:
@@ -675,6 +730,9 @@ class Pmdarima_Model:
                                 t_list_mod = ['n']
                             for t in t_list_mod:
                                 for date, fourier, box, log in feats_iter:
+                                    if max_models and to_run_count>=max_models:
+                                        print(f'Reached {max_models} models, ending grid-building.')
+                                        return mod_count, to_run_count, models
                                     f_m_mod = int(f_m)
                                     k_mod = int(k)
                                     if not fourier:
@@ -701,15 +759,7 @@ class Pmdarima_Model:
                                     # print(self.GS_all_mod_params_df['Fourier_m'].dtypes)
                                     models.append((mod_params, mod_params_df, pipe))
                                     to_run_count += 1
-            self.GS_mod_count = to_run_count
-            try:
-                assert(to_run_count > 0), f'Based on parameters given, 0 models built out of {mod_count} in grid, terminating.'
-            except AssertionError as e:
-                print(e)
-                raise
-            print(f'Finished building list of {to_run_count} models.') if verbose else None
-            return models
-            # print(models) if debug else None
+            return mod_count, to_run_count, models
 
         def __GS_start(models, verbose=0, debug=False, parallel=True):
 
@@ -750,9 +800,13 @@ class Pmdarima_Model:
             return scores
 
         # if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
-        models = __GS_setup_params(t_list=t_list, with_intercept=with_intercept,
-            f_m=f_m, k=k, date=date,
-            fourier=fourier, box=box, log=log, verbose=verbose)
+        # models = __GS_setup_params(t_list=t_list, with_intercept=with_intercept,
+        #     f_m=f_m, k=k, date=date,
+        #     fourier=fourier, box=box, log=log, verbose=verbose)
+        # models = __GS_setup_params()
+        models = __GS_setup_params(min_p, max_p, min_q, max_q, min_d, max_d,
+                min_order, max_order, t_list, with_intercept, f_m, k,
+                date, fourier, box, log, max_models, verbose)
         scores = __GS_start(models, debug=debug, verbose=verbose, parallel=parallel)
 
         # clear()
@@ -835,7 +889,7 @@ class Pmdarima_Model:
                      alpha=0.5, color='orange',
                      label="Confidence Intervals")
         ax.legend(loc='upper left', borderaxespad=0.5, prop={"size":16})
-        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Test vs Predict with Confidence Interals\n', size=26)
+        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Test vs Predict with Confidence Intervals\n', size=26)
         ax.set_ylabel(ylabel, size=18)
         ax.set_xlabel(ax.get_xlabel(), size=18)
         tick_params = dict(size=4, width=1.5, labelsize=16)
@@ -923,12 +977,19 @@ class Pmdarima_Model:
 
     def run_stepwise_CV(self, model=None, func='AA', dynamic=False, verbose=1, visualize=True, return_conf_int=True):
         model_str = ''
+        '''
+        Runs step-wise cross-validation on either an existing AutoARIMA pipeline,
+        an existing GridSearch pipeline, or an adhoc pipe passed in as `model`.
+        '''
         if func == 'AA':
-            model = self.AA_mod_pipe
+            if not model:
+                model = self.AA_mod_pipe
+            mod_params = self.AA_best_params
             mod_params_df = self.AA_best_mod_params_df
         elif func == 'GS':
             if not model:
                 model = self.GS_best_mod_pipe
+            mod_params = self.GS_best_params
             mod_params_df = self.GS_best_mod_params_df
             # in case not already fit
             self.fit_model(model)
@@ -936,7 +997,11 @@ class Pmdarima_Model:
             mod_params_df = self.mod_params_df
             if not model:
                 model = self.mod_pipe
+                # mod_params = self.mod_params - will not exist
             else:
+                # special function, upon loading passed in model pipeline,
+                # checking if pipeline contains AutoARIMA and, if so,
+                # replace with ARIMA
                 if type(model.named_steps['arima'])==pm.AutoARIMA:
                     arima_order = model.named_steps['arima'].model_.order
                     with_intercept = model.named_steps['arima'].model_.with_intercept
@@ -994,7 +1059,7 @@ class Pmdarima_Model:
                 else:
                     mod_params_df['Log'] = True
             if verbose == 1:
-                print('Explict model pipe passed: \n', mod_params_df)
+                print('Explicit model pipe passed: \n', mod_params_df)
                 print('Pipeline: \n', model)
             # in case not already fit
             self.fit_model(model)
@@ -1026,6 +1091,8 @@ class Pmdarima_Model:
         mod_params_df['RMSE%'].values[0] = '%.4f' % (self.RMSE_pc)
         mod_params_df['SMAPE'].values[0] = '%.4f' % (self.SMAPE)
         mod_params_df['CV_Time'].values[0] = '%.4f' % (self.end-self.start)
+
+        # update scores
         if func == 'AA':
             self.AA_best_mod_params_df = mod_params_df
             self.__pickle_model(func='AA', verbose=verbose)
@@ -1068,9 +1135,9 @@ class Pmdarima_Model:
         # return X_train, X_test, exog_train, exog_test
 
     def run_gridsearch_CV(self, min_p=0, max_p=10, min_q=0, max_q=10, min_d=0, max_d=2,
-            min_order=0, max_order=6, t_list=['n','c','t','ct'],
-            with_intercept='auto', f_m=None, k=None, date=True, fourier=True, box=False, log=False,
-            visualize=True, return_conf_int=True, verbose=1, debug=False, parallel=True):
+            min_order=0, max_order=6, t_list=['n','c','t','ct'], with_intercept='auto',
+            f_m=None, k=None, date=True, fourier=True, box=False, log=False,visualize=True,
+            return_conf_int=True, max_models=0, verbose=1, debug=False, parallel=True):
         print('Setting up GridSearchCV...')
         self.GS_best_params, self.GS_best_mod_pipe = self.__reset_mod_params()
         if not f_m:
@@ -1081,21 +1148,21 @@ class Pmdarima_Model:
             min_q=min_q, max_q=max_q, min_d=min_d, max_d=max_d, min_order=min_order,
             max_order=max_order, t_list=t_list, with_intercept=with_intercept,
             f_m=f_m, k=k, date=date, fourier=fourier, box=box, log=log,
-            verbose=verbose, debug=debug, parallel=parallel)
+            max_models=max_models, verbose=verbose, debug=debug, parallel=parallel)
 
         if scores:
             print('GridsearchCV Completed.\n')
             print('Top 10 models from this run:')
             for model, AIC, RMSE, RMSE_pc, SMAPE in scores[:10]:
                 print('Model[%s]: AIC=%.3f | RMSE=%.3f | RMSE%%=%.3f%% | SMAPE=%.3f%%' % (model, AIC, RMSE, RMSE_pc, SMAPE))
-            self.__pickle_model(func='GS', verbose=verbose)
         else:
             print('No models were scored this run.')
-            pkl_filepath = f'{TOP}/models/{self.ts}_{self.tf}_{self.f}_GS_best_model.pkl'
-            print(f'Loading best model from {pkl_filepath}.')
-            mod_file = open(pkl_filepath,'rb')
-            mod_data = pkl.load(mod_file)
-            mod_file.close()
+
+            # load best model from model pickled
+            mod_data = Pmdarima_Model.__unpickle_model(self.ts, self.tf, self.f, func='GS')
+            # mod_file = open(pkl_filepath,'rb')
+            # mod_data = pkl.load(mod_file)
+            # mod_file.close()
 
             self.GS_best_params = mod_data[0]
             self.GS_best_mod_pipe = mod_data[1]
@@ -1160,7 +1227,7 @@ class Pmdarima_Model:
 
         today = self.df.index[-1]
         # df_size = self.length
-        self.new_dates, self.index_fc, self.new_dates_df = Pmdarima_Model.get_next_dates(today, self.length, self.days_fc)
+        self.new_dates, self.index_fc, self.new_dates_df = Pmdarima_Model.__get_next_dates(today, self.length, self.days_fc)
         # self.new_dates = new_dates
         # self.index_fc = index_fc
         # self.new_dates_df = new_dates_df

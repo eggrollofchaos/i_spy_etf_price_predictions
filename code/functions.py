@@ -12,7 +12,6 @@ import pickle as pkl
 from warnings import catch_warnings
 from warnings import filterwarnings
 
-
 import time
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -22,6 +21,7 @@ import pmdarima as pm
 from pmdarima import pipeline
 import prophet
 from sklearn.metrics import mean_squared_error as mse
+import scipy.stats as stats
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -48,8 +48,9 @@ munits.registry[date] = converter
 munits.registry[datetime] = converter
 
 # font = {'size'   : 16}
-font = {'family' : 'sans-serif',
-        'sans-serif' : 'Verdana',
+font = {
+        'family' : 'sans-serif',
+        'sans-serif' : 'Tahoma', # Verdana
         'weight' : 'normal',
         'size'   : '16'}
 matplotlib.rc('font', **font)
@@ -215,6 +216,71 @@ def load_yf_time_series(yf, year, symbol, freq=CBD):
     df.index = pd.to_datetime(df.index)
     return df
 
+def get_y_lim(series):
+    max_value = max(series)
+    min_value = min(series)
+    if abs(max_value) - abs(min_value):
+        upper, order = round_second_sigfig_5(max(series), 'up')
+        lower, order = round_second_sigfig_5(min(series), 'down', order=order, limit=0)
+    else:
+        lower, order = round_second_sigfig_5(min(series), 'down', limit=0)
+        upper, order = round_second_sigfig_5(max(series), 'up', order=order)
+    return lower, upper
+
+# def get_y_max(number):
+#     '''
+#     Helper function to round a large number to the second significant digit,
+#     useful for setting the max y on a plot without knowledge of the y values.
+#     '''
+#     exp = np.floor(np.log10(number))
+#     ten_exp = 10**exp
+#     mantissa = number/ten_exp
+#     numeral = round(mantissa%1,1)
+#     mod_0_5 = numeral % 0.5
+#     numeral += 0.5 - mod_0_5
+#     # if mod_0_5 >= 0.25:
+#     #     numeral += 0.5 - mod_0_5
+#     # else:
+#         # numeral -= mod_0_5
+#     base = np.floor(mantissa)*ten_exp
+#     add = numeral*ten_exp
+#     return int(base + add)
+
+def round_second_sigfig_5(number, direction, order=None, limit=None):
+    '''
+    Helper function to round a large (in absolute terms) number to the
+    second significant digit in terms of 5, either upward or downard, useful
+    for setting the min or max y on a plot without knowledge of the y values.
+    '''
+    pos = True
+    if order:
+        exp = order
+    else:
+        if number < 0:
+            exp = np.floor(np.log10(-number))
+        else:
+            exp = np.floor(np.log10(number))
+    ten_exp = 10**exp
+    mantissa = number/ten_exp               # will be negative if negative
+    numeral = round(mantissa%1,1)
+    mod_0_5 = numeral % 0.5
+    if direction == 'up':
+        numeral += 0.5 - mod_0_5
+    elif direction == 'down':
+        numeral -= mod_0_5
+
+    base = np.floor(mantissa)*ten_exp
+    add = numeral*ten_exp
+    result = int(base + add)
+
+    if direction == 'up':
+        limit = limit if limit else -np.inf
+        return max(result, limit), exp
+
+    if direction == 'down':
+        limit = limit if limit else np.inf
+        return min(result, limit), exp
+
 def set_up_calendar_index(df, cal):
     start = df.index[0]
     end = df.index[-1]
@@ -234,12 +300,27 @@ def get_conf_ints_pc(conf_ints, y_hat):
     return conf_ints_pc
 
 def pickle_data(data, pkl_filepath):
+    '''
+    Helper function for pickling data.
+    '''
     if os.path.exists(pkl_filepath):
         print('File exists, overwriting.')
     pkl_out = open(pkl_filepath,'wb')
     pkl.dump(data, pkl_out)
     pkl_out.close()
     print(f'Saved to {pkl_filepath}.')
+
+def unpickle_data(pkl_filepath):
+    '''
+    Helper function for unpickling data.
+    '''
+    if not os.path.exists(pkl_filepath):
+        print('File does not exist.')
+        return
+    pkl_out = open(pkl_filepath,'rb')
+    data = pkl.load(pkl_out)
+    pkl_out.close()
+    return data
 
 def __option_expiry_offset(date_df):
     '''
@@ -480,85 +561,385 @@ def csv_write_data(csv_filepath, data_df, verbose=1):
 #         writer = csv.DictWriter(csvfile, fieldnames = data_fields)
 #         writer.writerows(data_dict)
 
-def calc_buy_hold_profit(ohlc_df, shares=20000, start_date=None, end=None, freq=CBD):
+def calc_buy_hold_profit(ohlc_df, shares=20000, start_date=None):
     if start_date==None:
         start_date=ohlc_df.index[0]
-    if end==None:
-        end = get_most_recent_trading_day(freq)
-    cost_basis = shares*ohlc_df['close'][ohlc_df.index==pd.to_datetime(start_date)]
-    final_market_value = shares*ohlc_df['close'][-1]
-    total_profit = final_market_value - cost_basis
+    # cost_basis = shares*ohlc_df['close'][ohlc_df.index==pd.to_datetime(start_date)]
+    cost_basis = shares*ohlc_df['close'][start_date]
+    final_portfolio_value = shares*ohlc_df['close'][-1]
+    total_profit = final_portfolio_value - cost_basis
     total_profit_pc = 100*total_profit/cost_basis
 
     bh_profit_df = pd.DataFrame(index=ohlc_df.index)
-    bh_profit_df['market_value'] = ohlc_df['close']*shares
-    bh_profit_df['eod_profit'] = bh_profit_df['market_value'] - bh_profit_df['market_value'][0]
-    # ohlc_df['eod_profit_pc'] = 100*ohlc_df['eod_profit']/ohlc_df['market_value'][0]
-    plot_profit(shares, ohlc_df, bh_profit_df)
+    bh_profit_df['portfolio_value'] = ohlc_df['close']*shares
+    bh_profit_df['eod_profit'] = bh_profit_df['portfolio_value'] - bh_profit_df['portfolio_value'][0]
+    bh_profit_df['eod_profit_pc'] = 100*bh_profit_df['eod_profit']/bh_profit_df['portfolio_value'][0]
+    # plot_profit(shares, start_date, ohlc_df, bh_profit_df)
+    # print(f'Final portfolio value is ${"{:,.2f}".format(final_portfolio_value)}.')
+    print(f'Starting portfolio value was ${cost_basis:,.2f}.')
+    print(f'Final portfolio value is ${final_portfolio_value:,.2f}.')
+    print(f'Total profit is ${total_profit:,.2f}, which is a {total_profit_pc:,.2f}% profit.')
+    return total_profit, total_profit_pc, bh_profit_df
 
-    return total_profit, total_profit_pc, ohlc_df
+def plot_profits(shares, bh_profit_df, mod_profit_df, close_df, conf_ints, start_date=None):
+# def plot_profits(shares, spy_bh_vs_mod_data, start_date):
+    # bh_profit_df = spy_bh_vs_mod_data[0]
+    # mod_profit_df = spy_bh_vs_mod_data[1]
+    # close_df = spy_bh_vs_mod_data[2]
+    # conf_ints = spy_bh_vs_mod_data[3]
+    data = [bh_profit_df.eod_profit, mod_profit_df.eod_profit, close_df, conf_ints]
+    if not start_date:
+        start_date = close_df.index[0]
 
-def plot_profit(shares, ohlc_df, bh_profit_df, mod_profit_df=None):
+    # bh_y_min = get_y_lim(bh_profit_df.eod_profit)[0]
+    # bh_y_max = get_y_lim(bh_profit_df.eod_profit)[1]
+    # mod_y_min = get_y_lim(mod_profit_df.eod_profit)[0]
+    # mod_y_max = get_y_lim(mod_profit_df.eod_profit)[1]
+    bh_y_min = get_y_lim(data[0])[0]
+    bh_y_max = get_y_lim(data[0])[1]
+    mod_y_min = get_y_lim(data[1])[0]
+    mod_y_max = get_y_lim(data[1])[1]
+    profit_y_min = min(bh_y_min, mod_y_min)
+    profit_y_max = max(bh_y_max, mod_y_max)
+    spy_y_min = get_y_lim(list(zip(*data[3]))[0])[0]
+    spy_y_max = get_y_lim(list(zip(*data[3]))[1])[1]
+
+    colors = ['b','c','g','orange']
+    labels = ['`Buy and Hold` Strategy', '`I SPY` Model Strategy', 'SPY Close Price', 'Model Confidence Intervals']
+    ylabels = ['Profit (USD)', '', 'Price (USD)', '']
+    alpha = [0.9, 1, 1, 0.3]
+    numticks = 11
+
+    y_tick_formatter = ticker.FuncFormatter(lambda x, p: format(int(x), ','))
+    # y_tick_locator = ticker.LinearLocator(numticks=numticks)
     tick_params = dict(size=4, width=1.5, labelsize=16)
-    fig, ax1 = plt.subplots(figsize=(20,12))
-    ax1.plot(bh_profit_df.eod_profit, color = 'g', label = 'Buy and Hold')
-    ax1.get_yaxis().set_major_formatter(
-        ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-    ax1.set_yticks([0e6, 1e6, 2e6, 3e6, 4e6, 5e6, 6e6, 7e6, 8e6])
-    ax1.set_ylim(-1e5, 8e6)
-    ax2 = ax1.twinx()
-    # ax2.plot(ohlc_df.eod_profit_pc, color = 'b', label = 'Percent Profit')
-    # ax.set_yticklabels(y_ticks)
-    # ax.set_yticks(y_ticks)
-    ax1.set_ylabel('Profit (USD)', size=20)
-    ax2.set_ylabel('Profit (%)', size=20)
-    ax1.set_xlim(ohlc_df.index[0], ohlc_df.index[-1]+ohlc_df.size//1000*CBD)
-    ax1.tick_params(axis='x', **tick_params)
-    ax1.tick_params(axis='y', **tick_params)
-    ax2.tick_params(axis='y', **tick_params)
-    ax1.set_xlabel('Date', size=24)
-    ax1.set_title(f'{shares} shares purchased at {ohlc_df.close[0]} at the launch of SPY in 1993.', size=20)
-    fig.suptitle('SPY - Buy and Hold Strategy', size=24)
-    fig.subplots_adjust(top=0.90)
-    fig.legend(loc=(0.105, 0.83), prop={"size":16})
+
+    fig, ax0 = plt.subplots(figsize=(20,16))
+    ax1 = ax0.twinx()
+    ax2 = ax0.twinx()
+    ax3 = ax0.twinx()
+    axes = [ax0, ax1, ax2, ax3]
+
+    for n, ax in enumerate(axes):
+        if n==0:
+            ax.get_yaxis().set_major_formatter(y_tick_formatter)
+            ax.set_ylabel('Profit (USD)', size=20)
+        if n<=1:
+            ax.set_ylim(profit_y_min, profit_y_max)
+        if n>=2:
+            ax.set_ylim(spy_y_min, spy_y_max)
+        if n<=2:
+            data[n].plot(ax=ax, color=colors[n], alpha=alpha[n], label=labels[n], x_compat=True)
+        if n==3:
+            conf_int = np.asarray(conf_ints)
+            ax.fill_between(bh_profit_df.index,
+                conf_int[:, 0], conf_int[:, 1],
+                alpha=alpha[n], color=colors[n], animated=True,
+                label=labels[n])
+            ax.set_ylabel('Close Price (USD)', size=20)
+        ax.tick_params(axis='y', **tick_params)
+        # ax.get_yaxis().set_major_locator(y_tick_locator)
+
+    ax1.yaxis.set_visible(False)
+    ax0.tick_params(axis='x', **tick_params)
+    ax0.set_xlim(close_df.index[0], close_df.index[-1])
+    ax0.xaxis.get_offset_text().set_size(20)
+    ax0.set_xlabel('Date', size=20)
+    ax0.set_title(f'{shares:d} shares of SPY purchased @ price of ${close_df[0]:.2f} on {start_date.date()}.', size=20)
+    fig.suptitle('SPY - Comparison of `Buy and Hold` vs `I SPY` Model Strategy', size=24)
+    fig.subplots_adjust(top=0.93)
+    fig.legend(loc=(0.105, 0.81), prop={"size":16})
     plt.savefig(f'{TOP}/images/SPY_Profit_Graph.png')
 
-def __buy_shares(strat='all'):
-    if strat=='all':
-        print('Buying max possible # of shares.')
-    return
+class Gridsearch_Calc_Profit:
+    '''
+    Run GridSearchCV on model profit historical simulation by tuning parameters
+    standard deviation `z` and limit price offset percent `lim`.
+    '''
+    def __init__(self, ts, model, ohlc_df, exog_hist_df, shares=1000,
+        steps=10, z_min=0.5, z_max=2.5, lim_min=0, lim_max=1,
+        start_date=None, verbose=2):
+        self.ts = ts
+        self.model = model
+        self.ohlc_df = ohlc_df
+        self.exog_hist_df = exog_hist_df
+        self.shares = shares
+        self.steps = steps
+        self.z_min = z_min
+        self.z_max = z_max
+        self.lim_min = lim_min
+        self.lim_max = lim_max
+        self.start_date = start_date
+        self.verbose = verbose
 
-def __sell_shares(strat='all'):
-    if strat=='all':
-        print('Selling all shares.')
-    return
+        columns = ['z', 'Limit_Offset_pc', 'Final_Market_Value', 'Total_Profit', 'Total_Profit_pc']
+        self.GS_mod_profit_df = pd.DataFrame(columns=columns)
+        self.GS_mod_profit_df.index.name = 'Strategy'
+        self.z_list = np.linspace(z_min, z_max, steps).round(3)
+        self.lim_list = np.linspace(lim_min, lim_max, steps).round(3)
+        self.num_sims = len(self.z_list)*len(self.lim_list)
 
-def calc_model_profit(model, ohlc_df, endo_df, exog_hist_df, exog_fc_df, shares=20000,
-        start_date=None, end=None, freq=CBD, verbose=1):
-    if start_date==None:
-        start_date=ohlc_df.index[0]
-    if end==None:
-        end = get_most_recent_trading_day(freq)
-    cost_basis = shares*ohlc_df['close'][ohlc_df.index==pd.to_datetime(start_date)]
-    print('Starting model historical simulation.\n')
-    print('Fitting model to all exogenous variables... ', end='')
-    model.fit(endo_df, exog_hist_df)
-    print('Done.')
+    def __GS_calc_z_loop(self, z, verbose=0):
+        # mod_profit_dict = {}
+        if verbose:
+            [self.__GS_calc_lim_loop(z, lim, verbose) for lim in tqdm(self.lim_list, desc='GridSearch `lim` Loop')]
+        else:
+            [self.__GS_calc_lim_loop(z, lim, verbose) for lim in self.lim_list]
+        # print(mod_profit_dict)
+        # return mod_profit_dict
+
+    def __GS_calc_lim_loop(self, z, lim, verbose=0):
+        # for z in tqdm(np.arange(z_min, z_max, 0.2), desc='GridSearch Loop: z'):
+        #     for lim in tqdm(np.arange(lim_min, lim_max, 0.1), desc='GridSearch Loop: lim'):
+        mod_profit_dict = {}
+        if verbose:
+            print(f'Parameter standard deviations (z) = {z}, Limit price offset percent = {lim}')
+        y_hat, conf_ints, mod_profit, mod_profit_pc, mod_profit_df = \
+            calc_model_profit(self.model, self.ohlc_df, self.exog_hist_df, shares=self.shares,
+                z=z, limit_offset_pc=lim, verbose=verbose)
+        # mod_profit_dict['Time Series'] = ts
+        # mod_profit_dict['Model_Pipeline'] = model
+        # mod_profit_dict['Exogenous_Variables'] = exog_hist_df.columns[1:].tolist()
+        # mod_profit_dict['Initial_Shares'] = shares
+        # mod_profit_dict['Cost_Basis'] = cost_basis
+        mod_profit_dict['z'] = z
+        mod_profit_dict['Limit_Offset_pc'] = lim
+        mod_profit_dict['Final_Market_Value'] = mod_profit_df.eod_profit[-1]
+        mod_profit_dict['Total_Profit'] = mod_profit
+        mod_profit_dict['Total_Profit_pc'] = mod_profit_pc
+        print('__________________________________________________________________') if verbose else None
+
+        self.GS_mod_profit_df = self.GS_mod_profit_df.append(mod_profit_dict, ignore_index=True)
+        # return
+        # GS_mod_profit_df.append(mod_profit_dict, ignore_index=True)
+        return mod_profit_dict
+
+    # def run_gridsearch_calc_profit():
+    def main(self):
+        print(f'Running GridSearchCV on {self.ts} model trading strategy...')
+
+        # columns = ['Time Series', 'Model_Pipeline', 'Exogenous_Variables', 'z',
+        #     'Limit_Offset_pc', 'Initial_Shares', 'Cost_Basis', 'Final_Market_Value', 'Total_Profit', 'Total_Profit_pc']
+        # columns = ['z', 'Limit_Offset_pc', 'Final_Market_Value', 'Total_Profit', 'Total_Profit_pc']
+        # GS_mod_profit_df = pd.DataFrame(columns=columns)
+        # GS_mod_profit_df.index.name = 'Strategy'
+        # z_list = np.linspace(z_min, z_max, steps).round(3)
+        # lim_list = np.linspace(lim_min, lim_max, steps).round(3)
+        # num_sims = len(z_list)*len(lim_list)
+        print(f'Running {self.num_sims} simulations using `z` in ({self.z_min}, {self.z_max}) and `lim` in ({self.lim_min}, {self.lim_max}).')
+        # mod_profit_dict = []
+        if self.verbose:
+            [self.__GS_calc_z_loop(z, self.verbose) for z in tqdm(self.z_list, desc='GridSearch `z` Loop')]
+        else:
+            [self.__GS_calc_z_loop(z, self.verbose) for z in self.z_list]
+        # print(mod_profit_dict)
+        # GS_mod_profit_df = pd.DataFrame.from_records(mod_profit_dict)
+        N = self.GS_mod_profit_df.shape[0]
+        self.GS_mod_profit_df.insert(0, 'Cost_Basis', [self.shares*self.ohlc_df.close[0]]*N)
+        self.GS_mod_profit_df.insert(0, 'Initial_Shares', [self.shares]*N)
+        self.GS_mod_profit_df.insert(0, 'Exogenous_Variables', [self.exog_hist_df.columns[1:].tolist()]*N)
+        self.GS_mod_profit_df.insert(0, 'Model_Pipeline', [self.model]*N)
+        self.GS_mod_profit_df.insert(0, 'Time Series', [self.ts]*N)
+            # for lim in tqdm(np.arange(lim_min, lim_max, 0.1), desc='GridSearch Loop: lim'):
+            #     print(f'Parameter `z` = {z}')
+            #     print(f'Limit price offset percent = {lim}')
+            #     y_hat, conf_ints, mod_profit, mod_profit_pc, mod_profit_df = \
+            #         calc_model_profit(model, ohlc_df, exog_hist_df, shares=shares,
+            #             z=z, limit_offset_pc=lim, verbose=verbose)
+            #     mod_profit_dict['Time Series'] = ts
+            #     mod_profit_dict['Model_Pipeline'] = model
+            #     mod_profit_dict['Exogenous_Variables'] = exog_hist_df.columns[1:].tolist()
+            #     mod_profit_dict['z'] = z
+            #     mod_profit_dict['Limit_Offset_pc'] = lim
+            #     mod_profit_dict['Initial_Shares'] = shares
+            #     mod_profit_dict['Cost_Basis'] = cost_basis
+            #     mod_profit_dict['Final_Market_Value'] = mod_profit_df.eod_profit[-1]
+            #     mod_profit_dict['Total_Profit'] = mod_profit
+            #     mod_profit_dict['Total_Profit_pc'] = mod_profit_pc
+            #     GS_mod_profit_df = GS_mod_profit_df.append(mod_profit_dict, ignore_index=True)
+            #     print('__________________________________________________________________')
+        ts_str = self.ts.replace(' ', '_').title()
+        self.GS_mod_profit_df.to_csv(f'{TOP}/model_profit_CV/{ts_str}_Profit_CV.csv')
+        pickle_data(self.GS_mod_profit_df, f'{TOP}/model_profit_CV/{ts_str}_Profit_CV.pkl')
+
+        return self.GS_mod_profit_df
+
+    if __name__ == "__main__":
+        main()
+
+def calc_model_profit(model, ohlc_df, exog_hist_df, shares=1000, z=1,
+    limit_offset_pc=0.5, start_date=None, freq=CBD, verbose=1):
+    '''
+    Takes in model, fits it on the exogenous historical variables if not already,
+    and iteratively calculates profit by implementing buy/sell signals using
+    in-sample model prediction vs actual prices and summing the results.
+
+    Order types will be Quote Triggered Limit Orders.
+
+    Trigger price will be the low and high of the model prediction
+    confidence intervals for BUY and SELL orders, respectively, and the
+    limit price will be a percentage amount lower or higher, respectively.
+    Pass this parameter as `limit_offset_pc`. A value of 0 indicates a
+    Quote Triggered Market Order, or simply a Limit Order.
+
+    This model assumes trading of fractional shares is allowed.
+
+    Additionally, the # of standard deviations with which to calculate
+    confidence intervals can be set as `z`.
+    '''
+
+    def __buy_shares(shares, cash, date, trades, ohlc_df, stop_price,
+            limit_offset_pc, strat='all', verbose=0):
+        limit_price = stop_price - limit_offset_pc*0.01*stop_price
+        if ohlc_df.low[date] < limit_price:       # limit order will be filled
+            if strat=='all':
+                shares_to_buy = cash/limit_price
+            cost = shares_to_buy*limit_price
+            trades += 1
+            if verbose>1:
+                print('***********TRADE***********')
+                print(f'   Buying max number of shares - {shares_to_sell:,.4f}.')
+                print(f'   Cost = ${cost:,.2f}')
+            return shares_to_buy, cost, trades
+        else:
+            return 0, 0, 0
+
+    def __sell_shares(shares, cash, date, trades, ohlc_df, stop_price,
+            limit_offset_pc=0.5, strat='all', verbose=0):
+        limit_price = stop_price + limit_offset_pc*0.01*stop_price
+        if ohlc_df.high[date] > limit_price:      # limit order will be filled
+            if strat=='all':
+                shares_to_sell = shares
+            returns = shares_to_sell*limit_price
+            trades += 1
+            if verbose>1:
+                print('***********TRADE***********')
+                print(f'   Selling all {shares_to_sell:,.4f} shares.')
+                print(f'   Revenue = ${returns:,.2f}')
+            return shares_to_sell, returns, trades
+        else:
+            return 0, 0, 0
+
+    def __update_portfolio_value(date, shares, cash, shares_delta, cash_delta):
+        shares += shares_delta
+        cash += cash_delta
+        portfolio_value = shares*ohlc_df.low[date] + cash
+        return shares, cash, portfolio_value
+
+    print('Running `I SPY` model historical simulation...\n') if verbose else None
+    if start_date == None:
+        start_date = ohlc_df.index[0]
+    cost_basis = shares*ohlc_df.close[start_date]
+
+    # check if already fit
+    try:
+        model.named_steps['arima'].arroots()
+    except Exception as e:
+        if verbose>1:
+            print('Fitting model to all exogenous variables... ', end='')
+            print('Done.')
+        model.fit(ohlc_df.close, exog_hist_df)
 
     cash = 0
-    total_value = cash + cost_basis
-    print('Performing step-wise calculation of profit using time iterative model forecasts...')
-    for index, current_date in enumerate(tqdm(ohlc_df.index)):
-        print(f'Analyzing {current_date}')
-        y_hat, conf_ints = model.predict(X=exog_fc_df[index:index+1], return_conf_int=True, alpha=0.1)
-        if shares>0 and (ohlc_df.close[current_date] > conf_ints[index][1]):
-            __sell_shares('all')
+    portfolio_value = cash + cost_basis
+    trades = 0
+    predictions = []
+    conf_ints = []
+    N = ohlc_df.shape[0]
+    mod_profit_df = pd.DataFrame(index=ohlc_df.index)
+    mod_profit_df['shares'] = np.zeros(N)
+    mod_profit_df['cash'] = np.zeros(N)
+    mod_profit_df['trade'] = np.zeros(N)
+    mod_profit_df['portfolio_value'] = np.zeros(N)
+    mod_profit_df['eod_profit'] = np.zeros(N)
+    mod_profit_df['eod_profit_pc'] = np.zeros(N)
 
-        elif cash>0 and (ohlc_df.close[current_date] < conf_ints[index][0]):
-            __buy_shares('all')
+    print('Performing step-wise calculation of profit using time iterative model forecasts...\n') if verbose>1 else None
+    # if verbose:
+    #     [__calc_profit for index, current_date in enumerate(tqdm(ohlc_df.index, desc='Profit Calculation Loop'))]
+    # else:
+    #     [__calc_profit for index, current_date in enumerate(ohlc_df.index, desc='Profit Calculation Loop')]
+    #
+    # def __calc_profit():
+    #     return
 
+    for index, current_date in enumerate(tqdm(ohlc_df.index, desc='Profit Calculation Loop')):
+        print(f'Analyzing Day {index+1} - {current_date.date()}:') if verbose>1 else None
+        # a little animation to pass the time
+        if not verbose:
+            if index&1:
+                print('>_', end='\r')
+            else:
+                print('> ', end='\r')
+        traded = False
+        if index == 0:
+            # initialize as equal to the starting price to match dimensions
+            predictions.append(ohlc_df.close[current_date])
+            conf_ints.append([ohlc_df.close[current_date], ohlc_df.close[current_date]])
+            print('Nothing to do! We only just bought all the dang shares.') if verbose>1 else None
+        else:
+            pred, conf_int = model.predict_in_sample(X=exog_hist_df[0:index+1],
+                start=index, end=index, return_conf_int=True, alpha=(2-stats.norm.cdf(z)*2))
+            predictions.append(pred[0])
+            conf_ints.append(conf_int.tolist()[0])
+            # print(len(y_hat))
+            fcast = pred[0]
+            fcast_low = conf_int[0][0]
+            fcast_high = conf_int[0][1]
+            if verbose>1:
+                print('High  |   Low  |  Close | Predicted Close | Confidence Interval')
+                print('%.2f  | %.2f | %.2f   | %.2f | %.2f - %.2f' % (ohlc_df.high[current_date], ohlc_df.high[current_date], ohlc_df.close[current_date], fcast, fcast_low, fcast_high))
+                # print(f'{ohlc_df.high[current_date]:.2f}   {ohlc_df.low[current_date]:.2f}  {ohlc_df.close[current_date]:.2f}   | {fcast:.2f} | {fcast_low:.2f} - {fcast_high:.2f}')
+            high_diff = ohlc_df.high[current_date] - fcast_high
+            low_diff = ohlc_df.low[current_date] - fcast_low
+            if shares>0 and high_diff>0:
+                print('SPY high of day greater than top of confidence interval by %.2f' % high_diff) if verbose>1 else None
+                shares_to_sell, cash_received, trades = __sell_shares(shares, cash,
+                    current_date, trades, ohlc_df, stop_price=fcast_high,
+                    limit_offset_pc=limit_offset_pc, strat='all', verbose=verbose)
+                shares, cash, portfolio_value = __update_portfolio_value(current_date,
+                    shares, cash, -shares_to_sell, cash_received)
+                traded=True
 
+            elif cash>0 and low_diff<0:
+                print('SPY low of day less than bottom of confidence interval by %.2f' % low_diff) if verbose>1 else None
+                shares_to_buy, cash_spent, trades = __buy_shares(shares, cash,
+                    current_date, trades, ohlc_df, stop_price=fcast_low,
+                    limit_offset_pc=limit_offset_pc, strat='all', verbose=verbose)
+                shares, cash, portfolio_value = __update_portfolio_value(current_date,
+                    shares, cash, shares_to_buy, -cash_spent)
+                traded=True
 
+            else:
+                print('Price movement for today is within confidence interval.\n-----------Holding-----------') if verbose>1 else None
+                shares, cash, portfolio_value = __update_portfolio_value(current_date, shares, cash, 0, 0)
+
+        shares, cash, portfolio_value,
+
+        mod_profit_df.loc[current_date,'shares'] = shares
+        mod_profit_df.loc[current_date,'cash'] = cash
+        mod_profit_df.loc[current_date,'trade'] = traded
+        mod_profit_df.loc[current_date,'portfolio_value'] = portfolio_value
+        mod_profit_df.loc[current_date,'eod_profit'] = portfolio_value - cost_basis
+        mod_profit_df.loc[current_date,'eod_profit_pc'] = 100*(portfolio_value - cost_basis)/cost_basis
+
+        if verbose>1:
+            print('EOD portfolio snapshot:')
+            print('Shares | Cash | Portfolio Value')
+            print(f'{shares:,.4f} | ${cash:,.2f} | ${portfolio_value:,.2f} ')
+            print('__________________________________________________________________')
+        # time.sleep(5)
+    total_profit = portfolio_value-cost_basis
+    total_profit_pc = 100*(portfolio_value-cost_basis)/cost_basis
+    if verbose>1:
+        print('Done.')
+        print(f'Made {trades} trades out of {N} trading days.')
+        print(f'Starting portfolio value was ${cost_basis:,.2f}.')
+        print(f'Final portfolio value is ${portfolio_value:,.2f}.')
+    if verbose:
+        print(f'Total profit is ${total_profit:,.2f}, which is a {total_profit_pc:,.2f}% profit.')
+
+    return predictions, conf_ints, total_profit, total_profit_pc, mod_profit_df
 
 def get_av_all_data_slices(symbol, ts, y=2, m=12, interval = '60min', verbose=0):
     '''
@@ -661,16 +1042,17 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
     ax.set_xlabel(label, size = 18)
     fig.autofmt_xdate()
 
+# def plot_spy_fut_tsy_funds_time_series(data):
 def plot_spy_fut_tsy_funds_time_series(data):
     '''
     Plot the SPY, SPY Futures, 10Y Treasury Yield, and Fed Funds Curve
     '''
     try:
         colors = ['b','c','g','r']
-        labels = ['SPY 3Y Close', 'SPY Futures 3Y Close', '10Y Treasury Yield', 'Fed Funds Rate']
-        ylabels = ['SPY 3Y Close (USD)', 'SPY Futures 3Y Close (USD)', '10Y Treasury Yield %', 'Fed Funds Rate %']
+        labels = ['SPY Close', 'SPY Futures Close', '10Y Treasury Note Yield', 'Fed Funds Rate']
+        ylabels = ['SPY Close (USD)', 'SPY Futures Close (USD)', 'Treasury Yield %', 'Fed Funds Rate %']
         alpha = [0.9, 1, 1, 1]
-        spy_range = (225, 425)
+        spy_range = (100, 425)
         yield_range = (0, 4)
         num_ticks = 9
         y_ranges = [spy_range, [10*x for x in spy_range], yield_range, yield_range]
@@ -681,15 +1063,16 @@ def plot_spy_fut_tsy_funds_time_series(data):
         ax4 = ax1.twinx()
         axes = [ax1, ax2, ax3, ax4]
         for n, ax in enumerate(axes):
-            if n==1:
-                ax.spines['left'].set_position(("axes", -0.06))
+            if n<=1:
+                ax.spines['left'].set_position(("axes", 0-0.08*n))
                 ax.spines['left'].set_edgecolor(colors[n])
                 ax.yaxis.set_label_position("left")
                 ax.yaxis.tick_left()
-            if n>1:
+            if n>=2:
                 ax.spines['right'].set_position(("axes", 1 + 0.04*(n-2)))
                 ax.spines['right'].set_edgecolor(colors[n])
-            data[n].plot(ax=ax, color=colors[n], alpha=alpha[n], label=labels[n])
+            # if n<=3:
+            data[n].plot(ax=ax, color=colors[n], alpha=alpha[n], label=labels[n], x_compat=True)
             y_ticks = np.linspace(y_ranges[n][0], y_ranges[n][1], num_ticks)
             pad = (y_ranges[n][1] - y_ranges[n][0]) / (num_ticks-1)/5
             y_lim = (y_ranges[n][0]-pad, y_ranges[n][1]+pad)
@@ -698,6 +1081,11 @@ def plot_spy_fut_tsy_funds_time_series(data):
             ax.set_ylim(y_lim)
             ax.tick_params(axis='y', colors=colors[n], **tick_params)
 
+        ax1.set_ylabel('Price (USD)', size=20, rotation='horizontal')
+        ax1.yaxis.set_label_coords(-0.1,1.005)
+        ax3.set_ylabel('%', size=20, rotation='horizontal')
+        ax3.yaxis.set_label_coords(1.04,-0.005)
+        ax1.set_xlim(data[0].index[0], data[0].index[-1])
         ax1.set_xlabel('Date', size=24)
         ax1.tick_params(axis='x', **tick_params)
         fig.suptitle(', '.join(labels), size=32)
@@ -860,4 +1248,5 @@ def model_stats(features, model, model_type, X_test, y_test, binary = False):
         ax[0].set_title(f'{model_type} Confusion Matrix', fontdict = {'fontsize': 14})
         plot_roc_curve(model, X_test, y_test, ax = ax[1])
         ax[1].set_title(f'{model_type} Receiver Operating Characteristic Curve', fontdict = {'fontsize': 14})
+
     return

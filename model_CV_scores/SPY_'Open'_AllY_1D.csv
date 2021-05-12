@@ -1,7 +1,7 @@
 Model,ARIMA_Order,Diffs,Mod_Order,Trend,Intercept,Date,Fourier,Fourier_m,Fourier_k,BoxCox,Log,Scored,AIC,RMSE,RMSE%,SMAPE,CV_Time
-0,"(0, 0, 0)",0,0,c,True,True,False,,,False,False,False,,,,,
-1,"(0, 0, 0)",0,0,t,True,True,False,,,False,False,False,,,,,
-2,"(0, 0, 0)",0,0,ct,True,True,False,,,False,False,False,,,,,
+0,"(0, 0, 0)",0,0,c,True,True,False,,,False,False,True,81890.5865,150.0264,130.1025,69.8138,2548.9654
+1,"(0, 0, 0)",0,0,t,True,True,False,,,False,False,True,72324.5742,72.3919,62.7781,26.2903,3645.5983
+2,"(0, 0, 0)",0,0,ct,True,True,False,,,False,False,True,72189.8811,71.1724,61.7205,25.8227,2796.9758
 3,"(0, 0, 1)",0,1,c,True,True,False,,,False,False,False,,,,,
 4,"(0, 0, 1)",0,1,t,True,True,False,,,False,False,False,,,,,
 5,"(0, 0, 1)",0,1,ct,True,True,False,,,False,False,False,,,,,
