@@ -1,0 +1,401 @@
+,Time Series,Model_Pipeline,Exogenous_Variables,Initial_Shares,Cost_Basis,z,Limit_Offset_pc,Final_Market_Value,Total_Profit,Total_Profit_pc
+0,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.0,-123.00179701883826,-123.00179701883826,-0.4641927387692072
+1,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.022,1477.9734804441432,1477.9734804441432,5.577679142448222
+2,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.044,1028.1769509849764,1028.1769509849764,3.88020570743363
+3,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.067,1265.8173841276075,1265.8173841276075,4.777029706564992
+4,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.089,820.654776756619,820.654776756619,3.0970440891066358
+5,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.111,324.02654991346935,324.02654991346935,1.2228339364443146
+6,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.133,-103.8425406592105,-103.8425406592105,-0.3918882042184244
+7,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.156,342.77476383562316,342.77476383562316,1.2935872504485213
+8,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.178,867.8836075347099,867.8836075347099,3.2752795363854412
+9,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.5,0.2,1176.5495794087255,1176.5495794087255,4.440144654795983
+10,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.0,1099.72875795875,1099.72875795875,4.150232894418181
+11,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.022,1697.5552239613244,1697.5552239613244,6.406352002336173
+12,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.044,952.520433681846,952.520433681846,3.594687879045307
+13,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.067,421.86711871416264,421.86711871416264,1.5920714817085928
+14,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.089,352.34042874021543,352.34042874021543,1.3296868221444627
+15,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.111,639.7521921012521,639.7521921012521,2.4143413298230283
+16,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.133,-296.0421072944664,-296.0421072944664,-1.117224300023676
+17,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.156,459.37202664963115,459.37202664963115,1.7336101124749854
+18,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.178,515.0497664115755,515.0497664115755,1.9437306402638423
+19,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.511,0.2,1824.9888665906583,1824.9888665906583,6.8872699483917685
+20,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.0,1837.3803787364122,1837.3803787364122,6.934033898999323
+21,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.022,1372.7917104217013,1372.7917104217013,5.180736861289254
+22,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.044,1269.164884705413,1269.164884705413,4.789662737129619
+23,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.067,115.92203167016851,115.92203167016851,0.43747462776031665
+24,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.089,129.93896556134496,129.93896556134496,0.4903727080306041
+25,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.111,182.3368044127892,182.3368044127892,0.6881153175821894
+26,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.133,-224.43696739344887,-224.43696739344887,-0.8469958415279442
+27,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.156,925.8469438995235,925.8469438995235,3.49402560764213
+28,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.178,1560.4997524116989,1560.4997524116989,5.889122528914886
+29,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.522,0.2,2304.990549259506,2304.990549259506,8.698733691947934
+30,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.0,1209.6636300705031,1209.6636300705031,4.565112762912961
+31,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.022,1289.3834131658223,1289.3834131658223,4.865964826427414
+32,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.044,634.981364831714,634.981364831714,2.3963368499689452
+33,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.067,431.1008761752273,431.1008761752273,1.6269184780034986
+34,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.089,475.8050677734027,475.8050677734027,1.79562626630713
+35,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.111,367.73394145269776,367.73394145269776,1.3877799313385617
+36,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.133,511.3882080201256,511.3882080201256,1.9299123964732234
+37,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.156,752.0838155942947,752.0838155942947,2.8382662254214304
+38,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.178,1738.567511693498,1738.567511693498,6.5611270269862025
+39,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.533,0.2,3398.241367822702,3398.241367822702,12.824519688007852
+40,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.0,1214.5687843867963,1214.5687843867963,4.583624175521161
+41,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.022,770.4410885747202,770.4410885747202,2.907544179302158
+42,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.044,-57.04736384275384,-57.04736384275384,-0.21528931042914495
+43,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.067,426.8783023636097,426.8783023636097,1.6109830351906613
+44,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.089,471.61696122231297,471.61696122231297,1.7798208984399448
+45,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.111,105.52598982503696,105.52598982503696,0.3982413217972191
+46,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.133,886.8920280731836,886.8920280731836,3.347014836220773
+47,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.156,1854.5510927547402,1854.5510927547402,6.9988339341205155
+48,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.178,2359.395678083929,2359.395678083929,8.904051552045804
+49,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.544,0.2,3626.6166239435806,3626.6166239435806,13.686378117520341
+50,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.0,1203.426253835656,1203.426253835656,4.541573718546445
+51,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.022,582.4414385447162,582.4414385447162,2.198058020968109
+52,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.044,296.79682432286427,296.79682432286427,1.1200725036507668
+53,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.067,390.88741960323387,390.88741960323387,1.475158137960082
+54,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.089,18.673794095837366,18.673794095837366,0.07047246328629994
+55,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.111,931.5669492710877,931.5669492710877,3.5156121618515317
+56,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.133,1142.8977471454382,1142.8977471454382,4.313147029058003
+57,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.156,2099.7974021494992,2099.7974021494992,7.924361518189537
+58,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.178,2694.6118792311645,2694.6118792311645,10.169113772775091
+59,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.556,0.2,3155.3439396126378,3155.3439396126378,11.907856475164236
+60,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.0,1188.6863361497053,1188.6863361497053,4.485947191733782
+61,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.022,119.1589518097644,119.1589518097644,0.4496903421741971
+62,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.044,240.7573815028627,240.7573815028627,0.9085869556978952
+63,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.067,124.68721639437717,124.68721639437717,0.4705532916624814
+64,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.089,858.933312898007,858.933312898007,3.2415022918174925
+65,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.111,962.4023705888285,962.4023705888285,3.6319810200267693
+66,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.133,1745.8018202675848,1745.8018202675848,6.5884283639706736
+67,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.156,2853.1739287443925,2853.1739287443925,10.767506266318346
+68,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.178,2939.6270829167042,2939.6270829167042,11.09376919404074
+69,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.567,0.2,1696.630460183238,1696.630460183238,6.402862064455032
+70,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.0,-61.02107105281175,-61.02107105281175,-0.23028556314747903
+71,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.022,596.8032304530243,596.8032304530243,2.252257550415065
+72,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.044,612.0797345843494,612.0797345843494,2.309909084485358
+73,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.067,271.70361628603496,271.70361628603496,1.0253740094382204
+74,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.089,1224.381584243678,1224.381584243678,4.620656402293118
+75,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.111,1396.444142945409,1396.444142945409,5.269998056636279
+76,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.133,2321.926308521375,2321.926308521375,8.762647038463506
+77,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.156,2944.198778506405,2944.198778506405,11.111022176907952
+78,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.178,1971.2633106523535,1971.2633106523535,7.439290621638863
+79,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.578,0.2,1286.450105341628,1286.450105341628,4.854894905291567
+80,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.0,128.9620357193453,128.9620357193453,0.48668590222829755
+81,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.022,295.4310930136089,295.4310930136089,1.114918411822588
+82,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.044,590.8799044206316,590.8799044206316,2.229903690550902
+83,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.067,639.8472282826151,639.8472282826151,2.4146999839758805
+84,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.089,1343.6814698862036,1343.6814698862036,5.070878610370093
+85,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.111,1551.0984150894983,1551.0984150894983,5.853643108081569
+86,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.133,2779.7027303792274,2779.7027303792274,10.49023554656977
+87,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.156,3211.9932734495196,3211.9932734495196,12.121643672266455
+88,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.178,1952.4769910468713,1952.4769910468713,7.368393501755916
+89,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.589,0.2,1461.860020737633,1461.860020737633,5.516869047201673
+90,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.0,397.16433308923297,397.16433308923297,1.4988463907555842
+91,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.022,182.309053849076,182.309053849076,0.6880105905742543
+92,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.044,492.17606875542697,492.17606875542697,1.8574082887362444
+93,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.067,1222.567196064403,1222.567196064403,4.613809137956005
+94,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.089,1377.5053414657596,1377.5053414657596,5.198525490048505
+95,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.111,2228.5103924398973,2228.5103924398973,8.410107555452095
+96,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.133,2889.5394603235363,2889.5394603235363,10.904745039325341
+97,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.156,1741.755245328095,1741.755245328095,6.573157117945634
+98,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.178,1531.4038037540777,1531.4038037540777,5.779318213678735
+99,SPY 3Y,"Pipeline(steps=[('date', DateFeaturizer(column_name='date')),
+                ('arima',
+                 ARIMA(maxiter=200, order=(0, 1, 1), suppress_warnings=True,
+                       trend='t'))])","['is_option_expiry', 'volume']",100,26498.001098632812,0.6,0.2,2072.592245108506,2072.592245108506,7.821692803897737

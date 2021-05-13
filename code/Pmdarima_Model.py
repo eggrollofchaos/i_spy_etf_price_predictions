@@ -51,8 +51,10 @@ matplotlib.rc('font', **font)
 pd.set_option('display.max_columns',None)
 pd.set_option('display.max_rows',25)
 
-from functions import *
-
+try:
+    from code.functions import *
+except Exception as e:
+    from functions import *
 from pathlib import Path
 TOP = Path(__file__ + '../../..').resolve()
 
@@ -86,10 +88,10 @@ class Pmdarima_Model:
 
         if type(df) == pd.Series:
             self.df = pd.DataFrame(df)
-        if impute:
-            self.df = df.interpolate()
         else:
             self.df = df
+        if impute:
+            self.df = df.interpolate()
         self.hist_dates_df = pd.DataFrame(self.df.index, columns=['date'])
         self.train_size = train_size
         self.df_train, self.df_test = pm.model_selection.train_test_split(self.df,
@@ -284,14 +286,17 @@ class Pmdarima_Model:
         if en_ex == 'exog':
             model.fit(self.df, hist_dates_df)
             print('Successfully fit model on historical observations.') if verbose else None
-            y_hat, conf_ints = model.predict(X=new_dates_df, return_conf_int=True)
+            # y_hat, conf_ints = model.predict(X=new_dates_df, return_conf_int=True)
             fc_df = pd.DataFrame(y_hat, index=index_fc, columns=[self.df.columns])
             fc_date_df = pd.DataFrame(zip(new_dates, y_hat), index=index_fc, columns=['date', self.df.columns[0]])
             fc_date_df.set_index('date', inplace=True)
         elif en_ex == 'endo':
             model.fit(y=self.df, X=hist_df)
             print('Successfully fit model on historical observations.') if verbose else None
+
             y_hat, conf_ints = model.predict(X=exog_df, return_conf_int=True)
+            # y_hat, conf_ints = self.__run_stepwise_fc(self.exog_df, model, verbose)
+
             # results = model.predict(n_periods=days_fc, X=exog_df, return_conf_int=True)
             fc_date_df = pd.DataFrame(zip(new_dates, y_hat), index=index_fc, columns=['date', self.df.columns[0]])
             fc_date_df.set_index('date', inplace=True)
@@ -477,7 +482,7 @@ class Pmdarima_Model:
         '''
         def __forecast_one_step(date_df):
             fc, conf_int = model.predict(X=date_df, return_conf_int=True)
-            return fc.tolist()[0], conf_int[0].tolist()
+            return fc.tolist()[0], conf_int.tolist()[0]
 
         def __run_CV_loop(n, new_obs, verbose=0):  # should be called iteratively
             fc, conf = __forecast_one_step(date_df)
@@ -504,17 +509,7 @@ class Pmdarima_Model:
         if not model:
             model = self.AA_mod_pipe
             print('No model specified, defaulting to AutoARIMA best model.') if verbose else None
-        # X_train = self.X_train
-        # X_test = self.X_test
-        # y_train = self.y_train
-        # y_test = self.y_test
-        # try:
-        #     assert(hasattr(model.named_steps['arima'], 'model_')), "Hmm"
-        # except AssertionError:
-        #     print('Model has not been fitted. Fitting now.')
-            # model.fit(y_train, X_train)
-        # model = self.mod_pipe
-        # date = pd.DataFrame([X_test.iloc[0].date], columns=['date'])
+
         date_df = pd.DataFrame([self.X_test.iloc[0].date], index=[self.X_train.size], columns=['date'])
         # date = X_test.iloc[0].date
         forecasts = []
@@ -523,7 +518,7 @@ class Pmdarima_Model:
         if dynamic:
             dynamic_str = ' dynamically with forecasted values'
         if verbose:
-            print(f'Iteratively making predictions on \'{self.data_name}\' Time Series and updating model{dynamic_str}, beginning with first index of y_test ...')
+            print(f'Iteratively making in-sample predictions on \'{self.data_name}\' Time Series and updating model{dynamic_str}, beginning with first index of y_test ...')
         self.start = time.time()
 
         if verbose:
@@ -533,34 +528,56 @@ class Pmdarima_Model:
             # results = [__run_CV_loop(n, new_obs) for n, new_obs in self.y_test]
             [__run_CV_loop(n, new_obs, verbose=verbose) for n, new_obs in enumerate(self.y_test)]
         print() if verbose else None
-        # for n, new_obs in enumerate(tqdm(self.y_test, desc='Step-Wise Prediction Loop')):
-        #     fc, conf = __forecast_one_step(date_df)
-        #     forecasts.append(fc)
-        #     conf_ints.append(conf)
-        #
-        #     # update the existing model with a small number of MLE steps
-        #     if dynamic:
-        #         model.update([fc], date_df)
-        #     elif not dynamic:
-        #         model.update([new_ob], date_df)
-        #
-        #     ## make a little animation
-        #     if n&1:
-        #         print('>_', end='\r')
-        #     else:
-        #         print('> ', end='\r')
-        #     # date = pd.DataFrame([X_test.iloc[0].date + CBD], index=[X_train.size]columns=['date'])
-        #     date_df.iloc[0].date += CBD
-        #     date_df.index += 1
-        #     # date += CBD
+
         self.end = time.time()
         print('Done.')
-        # forecast, conf_ints = results[0], results[1]
-        # y_hat = pd.Series(forecasts, index=y_test.index)
-        # self.conf_ints = conf_ints
-        # self.y_hat = forecasts
 
-        # return X_train, y_train, X_test, y_test, forecasts, conf_ints
+        return forecasts, conf_ints
+
+    def __run_stepwise_fc(self, exog_df, model, verbose=0):
+        def __forecast_one_step(exog_df):
+            fc, conf_int = model.predict(X=exog_df, return_conf_int=True)
+            return fc.tolist()[0], conf_int[0].tolist()
+
+        def __run_CV_loop(n, exog_row, verbose=0):  # should be called iteratively
+            exog_df = pd.DataFrame(exog_row)
+            fc, conf = __forecast_one_step(exog_df)
+            forecasts.append(fc)
+            conf_ints.append(conf)
+
+            # update the existing model with a small number of MLE steps
+            model.update([fc], X=exog_df)
+
+            ## make a little animation
+            if verbose:
+                if n&1:
+                    print('>_', end='\r')
+                else:
+                    print('> ', end='\r')
+            return
+
+        # check if model was passed
+        if not model:
+            model = self.GS_best_mod_pipe
+            print('No model specified, defaulting to GridSearch best model.') if verbose else None
+
+        forecasts = []
+        conf_ints = []
+        dynamic_str = ' dynamically with forecasted values'
+        if verbose:
+            print(f'Iteratively making out-of-sample predictions on \'{self.data_name}\' Time Series and updating model{dynamic_str}, beginning with first index of y_test ...')
+        self.start = time.time()
+
+        if verbose:
+            [__run_CV_loop(n, exog_df[n:n+1], verbose=verbose) for n in trange(exog_df.shape[0], desc='Step-Wise Prediction Loop')]
+        else:
+            [__run_CV_loop(n, exog_df[n:n+1], verbose=verbose) for n in range(exog_df[0])]
+
+        print() if verbose else None
+
+        self.end = time.time()
+        print('Done.')
+
         return forecasts, conf_ints
 
     def __GS_score_model(self, model, verbose=0, debug=False):
@@ -666,12 +683,10 @@ class Pmdarima_Model:
                     min_order, max_order, t_list, with_intercept, f_m, k,
                     date, fourier, box, log, max_models, verbose)
             self.GS_mod_count = to_run_count
-            try:
-                assert(to_run_count > 0), f'Based on parameters given, 0 models built out of {mod_count} in grid, terminating.'
-            except AssertionError as e:
-                print(e)
-                raise
-            print(f'Finished building list of {to_run_count} models.') if verbose else None
+            if to_run_count > 0:
+                print(f'Based on parameters given, 0 models built out of {mod_count} in grid.')
+            else:
+                print(f'Finished building list of {to_run_count} models.') if verbose else None
             return models
             # print(models) if debug else None
 
@@ -807,16 +822,17 @@ class Pmdarima_Model:
         models = __GS_setup_params(min_p, max_p, min_q, max_q, min_d, max_d,
                 min_order, max_order, t_list, with_intercept, f_m, k,
                 date, fourier, box, log, max_models, verbose)
-        scores = __GS_start(models, debug=debug, verbose=verbose, parallel=parallel)
+        if models:
+            scores = __GS_start(models, debug=debug, verbose=verbose, parallel=parallel)
+            try:
+                assert(scores != None), "No valid scores returned."
+            except AssertionError as e:
+                print(e)
+                raise
 
-        # clear()
-        try:
-            assert(scores != None), "No valid scores returned."
-        except AssertionError as e:
-            print(e)
-            raise
-        else:
             return self.GS_best_mod_pipe, scores
+        else:
+            return None, None
 
     def __run_auto_pipeline(self, show_summary=False, return_conf_int=False, verbose=1):
         # display visualization of entire data set
@@ -905,23 +921,25 @@ class Pmdarima_Model:
             ax.set_title(f'Parameters: {self.mod_params}', size=24)
             plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
 
-    def plot_forecast_conf(self, ohlc_df=None, hist_df=None, y_hat=None, conf_ints=True, days_fc=5,
-            lookback=120, ylabel=None, fin=False, func='GS'):
+    def plot_forecast_conf(self, ohlc_df=None, ohlc_fc_df=None, hist_df=None, y_hat=None, conf_ints=True, days_fc=5,
+            lookback=120, ylabel=None, fin=False, all_ohlc=False, func='GS'):
         '''
         Plot forecasts with optional confidence intervals. Can only be run after
         forecasts have been generated.
         '''
+
         ylabel=self.data_name
         conf = ''
         fig, ax = plt.subplots(figsize=(24, 16))
         if fin:
             mpl.plot(ohlc_df[-lookback:], type='candle', style="yahoo", ax=ax)
-            ax.plot(range(lookback, lookback+days_fc), y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
-            # ax.set_xlim(0, lookback+lookback//10)
-            ax.set_xlim(0, lookback+days_fc+5)
             equidate_ax(fig, ax, self.df_with_fc[-lookback-days_fc:].index.date)
-            ax.set_xlabel(f'Date', size=20)
-        else:
+            ax.set_xlim(0, lookback+days_fc+5)
+            if all_ohlc:
+                mpl.plot(ohlc_fc_df[lookback, lookback+days_fc], type='candle', style="yahoo", ax=ax)
+            if not all_ohlc:
+                ax.plot(range(lookback, lookback+days_fc), y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
+        else: ## not fin
             ax.plot(hist_df[-lookback:], color='blue', alpha=0.5, label='Historical')
             ax.plot(self.new_dates, y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
             ax.set_xlim(self.df_with_fc.index[-lookback], self.df_with_fc.index[-1]+(lookback//20)*CBD)
@@ -992,7 +1010,13 @@ class Pmdarima_Model:
             mod_params = self.GS_best_params
             mod_params_df = self.GS_best_mod_params_df
             # in case not already fit
-            self.fit_model(model)
+            try:
+                self.model.named_steps['arima'].arroots()
+            except Exception as e:
+                print('Fitting model... ', end='') if self.verbose else None
+                self.fit_model(model)
+                print('Done.') if self.verbose else None
+
         elif func == 'adhoc':
             mod_params_df = self.mod_params_df
             if not model:
@@ -1062,7 +1086,12 @@ class Pmdarima_Model:
                 print('Explicit model pipe passed: \n', mod_params_df)
                 print('Pipeline: \n', model)
             # in case not already fit
-            self.fit_model(model)
+            try:
+                self.model.named_steps['arima'].arroots()
+            except Exception as e:
+                print('Fitting model... ', end='') if self.verbose else None
+                self.fit_model(model)
+                print('Done.') if self.verbose else None
 
         if verbose:
             if func == 'AA':
@@ -1110,7 +1139,7 @@ class Pmdarima_Model:
             self.plot_test_predict(self.y_hat, conf_ints=return_conf_int, ylabel=self.data_name, func=func)
         return self.AIC, self.RMSE, self.RMSE_pc, self.SMAPE
 
-    def run_auto_pipeline(self, show_summary=False, visualize=True, return_conf_int=True, verbose=1):
+    def run_auto_pipeline(self, show_summary=False, visualize=False, return_conf_int=True, verbose=1):
         if verbose:
             print('Starting AutoARIMA...')
             print(f'Data set diffs to use: {self.n_diffs}') if self.n_diffs else None
@@ -1158,7 +1187,7 @@ class Pmdarima_Model:
         else:
             print('No models were scored this run.')
 
-            # load best model from model pickled
+            # load best model from model pickle file
             mod_data = Pmdarima_Model.__unpickle_model(self.ts, self.tf, self.f, func='GS')
             # mod_file = open(pkl_filepath,'rb')
             # mod_data = pkl.load(mod_file)
@@ -1168,6 +1197,7 @@ class Pmdarima_Model:
             self.GS_best_mod_pipe = mod_data[1]
             self.GS_best_mod_params_df = mod_data[2]
 
+            # run CV on model if not y_hat and conf_ints aren't present
             try:
                 self.y_hat = mod_data[4][0]
                 self.conf_ints = mod_data[4][1]
@@ -1211,8 +1241,9 @@ class Pmdarima_Model:
 
         self.hist_df = hist_df
 
+        # if no model passed, use adhoc model
         if not model:
-            model = self.AA_mod_pipe
+            model = self.mod_pipe
 
         if verbose:
             var = None

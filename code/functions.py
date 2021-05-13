@@ -16,6 +16,7 @@ import time
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import pandas_market_calendars as mcal
+import mplfinance as mpl
 
 import pmdarima as pm
 from pmdarima import pipeline
@@ -85,19 +86,19 @@ class CustomFormatter(FuncFormatter):
 #     return df.index[thisind].strftime('%Y-%m-%d')
 
 # displaying years / months in figures
-years = mdates.YearLocator()
-years_fmt = mdates.DateFormatter('%Y')
-months = mdates.MonthLocator()
-months_fmt = mdates.DateFormatter('%B %Y')
-days = mdates.DayLocator()
-days_fmt = mdates.DateFormatter('%B %d, %Y')
-hours = mdates.HourLocator()
-hours_fmt = mdates.DateFormatter('%B %d, %Y %H:00')
+# years = mdates.YearLocator()
+# years_fmt = mdates.DateFormatter('%Y')
+# months = mdates.MonthLocator()
+# months_fmt = mdates.DateFormatter('%B %Y')
+# days = mdates.DayLocator()
+# days_fmt = mdates.DateFormatter('%B %d, %Y')
+# hours = mdates.HourLocator()
+# hours_fmt = mdates.DateFormatter('%B %d, %Y %H:00')
 
 NYSE = mcal.get_calendar('NYSE')
 CBD = NYSE.holidays()
 
-# print(f'Functions loaded from {TOP}/data.')
+# print(f'Functions.py loaded from {TOP}/data.')
 
 
 
@@ -137,13 +138,25 @@ class CustomUSHolidayCalendar(AbstractHolidayCalendar):
         Holiday('Christmas', month=12, day=25, observance=nearest_workday),
     ]
 
+def get_quandl_time_series(quandl, year, symbol, freq):
+    start_date, start_file, end_date, end_file, year = __ts_dates(year, freq)
+    df = quandl.get(symbol)
+    if symbol.find('TREASURY') != -1:
+        df = df['10 YR']
+        symbol = 'TSY'
+        df = df.asfreq(freq).interpolate()
+    else:
+        df = df.asfreq(freq)
+    if type(df) == pd.DataFrame:
+        df = df.Value
+    df.index.name = 'date'
+    slash = symbol.find('/')
+    symbol = symbol[slash+1:].lower()
+    df.name = symbol
+    df = df.sort_index().truncate(before=start_date, after=end_date)
+    df.to_csv(f'{TOP}/data/{symbol.upper()}_{year}_CBD_{start_file}_{end_file}.csv')
 
-# def get_quandl_time_series(years, symbol, freq):
-#     df = quandl.get("USTREASURY/YIELD")
-#     df_all = df.sort_index().truncate(before=spy_df_all.index[0], after=spy_df_all.index[-1])
-#     df_10Y = df_all.sort_index().truncate(before=spy_df_10Y.index[0])
-#     df_5Y = df_10Y.sort_index().truncate(before=spy_df_5Y.index[0])
-#     df_3Y = df_5Y.sort_index().truncate(before=spy_df_3Y.index[0])
+    return df
 
 def get_most_recent_trading_day(freq=CBD):
     now = pd.Timestamp.today()
@@ -151,7 +164,7 @@ def get_most_recent_trading_day(freq=CBD):
         (now.date()-freq+pd.offsets.Hour(17))
     return last
 
-def __get_yf_dates(year, freq=CBD):
+def __ts_dates(year, freq=CBD):
     today = pd.Timestamp.today()
     start_year = today.year - year
     year = f'{year}Y'
@@ -186,7 +199,7 @@ def get_yf_time_series(yf, years, symbol, freq=CBD, fut=False):
         # else:
         #     end_date = today.date() - freq + pd.offsets.Hour(16)
         # end_file = end_date.date()
-        start_date, start_file, end_date, end_file, year = __get_yf_dates(year, freq)
+        start_date, start_file, end_date, end_file, year = __ts_dates(year, freq)
 
         df = yf.download(symbol, start=start_date, end=end_date, progress=False)
         df.index = df.index.rename('date')
@@ -196,7 +209,7 @@ def get_yf_time_series(yf, years, symbol, freq=CBD, fut=False):
             df.columns = YF_COLUMNS
         df.to_csv(f'{TOP}/data/{symbol}_{year}_CBD_{start_file}_{end_file}.csv')
 
-def load_yf_time_series(yf, year, symbol, freq=CBD):
+def load_yf_time_series(yf, year, symbol, freq=CBD, impute=True):
     # start_year = today.year - year
     # year = f'{year}Y'
     # start_date = pd.to_datetime(f'{start_year}-05-01')
@@ -210,10 +223,14 @@ def load_yf_time_series(yf, year, symbol, freq=CBD):
     # else:
     #     end_date = today.date() - freq + pd.offsets.Hour(16)
     # end_file = end_date.date()
-    start_date, start_file, end_date, end_file, year = __get_yf_dates(year, freq)
+    start_date, start_file, end_date, end_file, year = __ts_dates(year, freq)
 
-    df = pd.read_csv(f'../data/{symbol}_{year}_CBD_{start_file}_{end_file}.csv', index_col='date')
+    df = pd.read_csv(f'{TOP}/data/{symbol}_{year}_CBD_{start_file}_{end_file}.csv', index_col='date')
     df.index = pd.to_datetime(df.index)
+    df = df.asfreq(freq)
+    if impute == True:
+        df = df.interpolate()
+
     return df
 
 def get_y_lim(series):
@@ -798,7 +815,7 @@ def calc_model_profit(model, ohlc_df, exog_hist_df, shares=1000, z=1,
             trades += 1
             if verbose>1:
                 print('***********TRADE***********')
-                print(f'   Buying max number of shares - {shares_to_sell:,.4f}.')
+                print(f'   Buying max number of shares - {shares_to_buy:,.4f}.')
                 print(f'   Cost = ${cost:,.2f}')
             return shares_to_buy, cost, trades
         else:
@@ -1042,7 +1059,15 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
     ax.set_xlabel(label, size = 18)
     fig.autofmt_xdate()
 
-# def plot_spy_fut_tsy_funds_time_series(data):
+def plot_spy_fin(ohlc_data):
+    fig, ax = plt.subplots(figsize=(16, 12))
+    mpl.plot(ohlc_data, type='candle', style="yahoo", ax=ax)
+    ax.set_ylabel('Price (USD)', size=20)
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.tick_params(axis='both', which='minor', labelsize=16)
+    fig.suptitle('SPY - 10 Year Performance', size=30)
+    fig.subplots_adjust(top=0.92)
+
 def plot_spy_fut_tsy_funds_time_series(data):
     '''
     Plot the SPY, SPY Futures, 10Y Treasury Yield, and Fed Funds Curve
@@ -1086,7 +1111,7 @@ def plot_spy_fut_tsy_funds_time_series(data):
         ax3.set_ylabel('%', size=20, rotation='horizontal')
         ax3.yaxis.set_label_coords(1.04,-0.005)
         ax1.set_xlim(data[0].index[0], data[0].index[-1])
-        ax1.set_xlabel('Date', size=24)
+        ax1.set_xlabel('Year', size=24)
         ax1.tick_params(axis='x', **tick_params)
         fig.suptitle(', '.join(labels), size=32)
         fig.subplots_adjust(top=0.92)
@@ -1109,9 +1134,9 @@ def test_stationarity(df_all, diffs=0):
         dfoutput['Critical Value (%s)' %key] = value
     print (dfoutput)
 
-def plot_pacf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
+def plot_pacf_with_diff(df, symbol, n, period, freq, lags, diffs=1, alpha=0.05):
     timeframe = f'{n} {period.title()}'
-    pacf_fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    pacf_fig, ax = plt.subplots(1, diffs+1, figsize=((diffs+1)*6, 6))
     pacf_fig.suptitle(f'Partial Autocorrelations of {symbol} Time Series: {timeframe}, Frequency = {freq}', fontsize=18)
     plot_pacf(df, ax=ax[0], lags=lags, alpha=alpha)
     ax[0].set_title('Undifferenced PACF', size=14)
@@ -1121,17 +1146,18 @@ def plot_pacf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
     ax[1].set_title('Differenced PACF', size=14)
     ax[1].set_xlabel('Lags', size=14)
     ax[1].set_ylabel('PACF', size=14)
-    plot_pacf(df.diff().diff().dropna(), ax=ax[2], lags=lags, alpha=alpha)
-    ax[2].set_title('Twice-Differenced PACF', size=14)
-    ax[2].set_xlabel('Lags', size=14)
-    ax[2].set_ylabel('ACF', size=14)
+    if diffs == 2:
+        plot_pacf(df.diff().diff().dropna(), ax=ax[2], lags=lags, alpha=alpha)
+        ax[2].set_title('Twice-Differenced PACF', size=14)
+        ax[2].set_xlabel('Lags', size=14)
+        ax[2].set_ylabel('ACF', size=14)
     pacf_fig.tight_layout()
     pacf_fig.subplots_adjust(top=0.9)
-    plt.savefig(f'{top}/images/{symbol}_{timeframe}_{freq}_PACF.png')
+    plt.savefig(f'{TOP}/images/{symbol}_{timeframe}_{freq}_PACF.png')
 
-def plot_acf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
+def plot_acf_with_diff(df, symbol, n, period, freq, lags, diffs=1, alpha=0.05):
     timeframe = f'{n} {period.title()}'
-    acf_fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    acf_fig, ax = plt.subplots(1, diffs+1, figsize=((diffs+1)*6, 6))
     acf_fig.suptitle(f'Autocorrelations of {symbol} Time Series: {timeframe}, Frequency = {freq}', fontsize=18)
     plot_acf(df, ax=ax[0], lags=lags, alpha=alpha)
     ax[0].set_title('Undifferenced ACF', size=14)
@@ -1141,15 +1167,16 @@ def plot_acf_with_diff(df, symbol, n, period, freq, lags, alpha=0.05):
     ax[1].set_title('Once-Differenced ACF', size=14)
     ax[1].set_xlabel('Lags', size=14)
     ax[1].set_ylabel('ACF', size=14)
-    plot_acf(df.diff().diff().dropna(), ax=ax[2], lags=lags, alpha=alpha)
-    ax[2].set_title('Twice-Differenced ACF', size=14)
-    ax[2].set_xlabel('Lags', size=14)
-    ax[2].set_ylabel('ACF', size=14)
+    if diffs == 2:
+        plot_acf(df.diff().diff().dropna(), ax=ax[2], lags=lags, alpha=alpha)
+        ax[2].set_title('Twice-Differenced ACF', size=14)
+        ax[2].set_xlabel('Lags', size=14)
+        ax[2].set_ylabel('ACF', size=14)
     acf_fig.tight_layout()
     acf_fig.subplots_adjust(top=0.9)
     plt.savefig(f'{TOP}/images/{symbol}_{timeframe}_{freq}_ACF.png')
 
-def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
+def plot_seasonal_decomposition(df, symbol, n, period, freq, seas, seas_str):
     timeframe = f'{n} {period.title()}'
     delta_freq = freq.split()[1].lower() + 's'
     delta = {}
@@ -1191,10 +1218,12 @@ def plot_seasonal_decomposition(df, symbol, n, period, freq, seas):
         plt.setp(ax.xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
 
     decomp_fig.suptitle(
-        f'Seasonal Decomposition of {symbol} Time Series\n{timeframe}, Seasonality = 1 Year', fontsize=30)
+        f'Seasonal Decomposition of {symbol} Time Series\n{timeframe}, Seasonality = {seas_str}', fontsize=30)
     decomp_fig.tight_layout()
     decomp_fig.subplots_adjust(top=0.9)
-    plt.savefig(f'{TOP}/images/{symbol}_{timeframe}_{freq}_seasonal_decomp.png')
+
+    seas_str = seas_str.replace(' ', '_')
+    plt.savefig(f'{TOP}/images/{symbol}_{timeframe}_{freq}_seasonal_decomp_{seas_str}.png')
 
 
 def train_test_split_data(df, train_size=80, verbose=0):

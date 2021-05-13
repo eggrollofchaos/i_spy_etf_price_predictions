@@ -3,7 +3,12 @@ import pandas as pd
 import matplotlib
 import numpy as np
 
-from functions import *
+try:
+    from code.functions import *
+except Exception as e:
+    from functions import *
+
+# print(f'Model_Historical_Simuluation.py loaded from {TOP}/data.')
 
 class Model_Historical_Simuluation():
     '''
@@ -26,69 +31,67 @@ class Model_Historical_Simuluation():
     '''
 
     def __init__(self, model, ohlc_df, exog_hist_df, shares=1000, z=1,
-        limit_offset_pc=0.5, start_date=None, freq=CBD, verbose=1):
-        self.self.model = model
+        limit_offset_pc=0.5, start_date=None, verbose=0):
+        self.model = model
         self.ohlc_df = ohlc_df
-        self.exog_hist_df = ohlc_df
+        self.exog_hist_df = exog_hist_df
         self.shares = shares
         self.z = z
         self.limit_offset_pc = limit_offset_pc
         self.start_date = start_date
-        self.freq = freq
+        if self.start_date == None:
+            self.start_date = self.ohlc_df.index[0]
+        self.cost_basis = self.shares*self.ohlc_df.close[self.start_date]
         self.verbose = verbose
         self.cash = 0
-        self.portfolio_value = cash + cost_basis
+        self.portfolio_value = self.cash + self.cost_basis
         self.trades = 0
         self.predictions = []
         self.conf_ints = []
 
-    def __buy_shares(self, shares, cash, date, trades, ohlc_df, stop_price,
-            limit_offset_pc, strat='all', verbose=0):
-        limit_price = stop_price - limit_offset_pc*0.01*stop_price
-        if ohlc_df.low[date] < limit_price:       # limit order will be filled
+    def __buy_shares(self, date, stop_price, strat='all', verbose=0):
+        limit_price = stop_price - self.limit_offset_pc*0.01*stop_price
+        if self.ohlc_df.low[date] < limit_price:       # limit order will be filled
             if strat=='all':
-                shares_to_buy = cash/limit_price
+                shares_to_buy = self.cash/limit_price
             cost = shares_to_buy*limit_price
-            trades += 1
+            self.trades += 1
             if verbose>1:
                 print('***********TRADE***********')
-                print(f'   Buying max number of shares - {shares_to_sell:,.4f}.')
+                print(f'   Buying max number of shares - {shares_to_buy:,.4f}.')
                 print(f'   Cost = ${cost:,.2f}')
-            return shares_to_buy, cost, trades
+            return shares_to_buy, cost
         else:
-            return 0, 0, 0
+            return 0, 0
 
-    def __sell_shares(shares, cash, date, trades, ohlc_df, stop_price,
-            limit_offset_pc=0.5, strat='all', verbose=0):
-        limit_price = stop_price + limit_offset_pc*0.01*stop_price
-        if ohlc_df.high[date] > limit_price:      # limit order will be filled
+    def __sell_shares(self, date, stop_price, strat='all', verbose=0):
+        limit_price = stop_price + self.limit_offset_pc*0.01*stop_price
+        if self.ohlc_df.high[date] > limit_price:      # limit order will be filled
             if strat=='all':
-                shares_to_sell = shares
+                shares_to_sell = self.shares
             returns = shares_to_sell*limit_price
-            trades += 1
+            self.trades += 1
             if verbose>1:
                 print('***********TRADE***********')
                 print(f'   Selling all {shares_to_sell:,.4f} shares.')
                 print(f'   Revenue = ${returns:,.2f}')
-            return shares_to_sell, returns, trades
+            return shares_to_sell, returns
         else:
-            return 0, 0, 0
+            return 0, 0
 
-    def __update_portfolio_value(date, shares, cash, shares_delta, cash_delta):
-        shares += shares_delta
-        cash += cash_delta
-        portfolio_value = shares*ohlc_df.low[date] + cash
-        return shares, cash, portfolio_value
+    def __update_portfolio_value(self, date, shares_delta, cash_delta):
+        self.shares += shares_delta
+        self.cash += cash_delta
+        self.portfolio_value = self.shares*self.ohlc_df.low[date] + self.cash
 
-
-    def __calc_profit(index, current_date):
+    def __calc_profit(self, index, current_date, verbose=0):
         '''
         Iteratively calculate profit using in-sample predictions one day
         at a time, with dynamic = False.
         '''
         print(f'Analyzing Day {index+1} - {current_date.date()}:') if verbose>1 else None
         # a little animation to pass the time
-        if not verbose:
+        if verbose:
             if index&1:
                 print('>_', end='\r')
             else:
@@ -96,169 +99,93 @@ class Model_Historical_Simuluation():
         traded = False
         if index == 0:
             # initialize as equal to the starting price to match dimensions
-            predictions.append(ohlc_df.close[current_date])
-            conf_ints.append([ohlc_df.close[current_date], ohlc_df.close[current_date]])
+            self.predictions.append(self.ohlc_df.close[current_date])
+            self.conf_ints.append([self.ohlc_df.close[current_date], self.ohlc_df.close[current_date]])
             print('Nothing to do! We only just bought all the dang shares.') if verbose>1 else None
         else:
-            pred, conf_int = self.model.predict_in_sample(X=exog_hist_df[0:index+1],
-                start=index, end=index, return_conf_int=True, alpha=(2-stats.norm.cdf(z)*2))
-            predictions.append(pred[0])
-            conf_ints.append(conf_int.tolist()[0])
+            # pred, conf_int = self.model.predict_in_sample(X=self.exog_hist_df[0:index+1],
+            pred, conf_int = self.model.predict_in_sample(X=self.exog_hist_df,
+                start=index, end=index, return_conf_int=True, alpha=(2-stats.norm.cdf(self.z)*2))
+            self.predictions.append(pred[0])
+            self.conf_ints.append(conf_int.tolist()[0])
             # print(len(y_hat))
             fcast = pred[0]
             fcast_low = conf_int[0][0]
             fcast_high = conf_int[0][1]
             if verbose>1:
-                print('High  |   Low  |  Close | Predicted Close | Confidence Interval')
-                print('%.2f  | %.2f | %.2f   | %.2f | %.2f - %.2f' % (ohlc_df.high[current_date], ohlc_df.high[current_date], ohlc_df.close[current_date], fcast, fcast_low, fcast_high))
-                # print(f'{ohlc_df.high[current_date]:.2f}   {ohlc_df.low[current_date]:.2f}  {ohlc_df.close[current_date]:.2f}   | {fcast:.2f} | {fcast_low:.2f} - {fcast_high:.2f}')
-            high_diff = ohlc_df.high[current_date] - fcast_high
-            low_diff = ohlc_df.low[current_date] - fcast_low
-            if shares>0 and high_diff>0:
+                print('High   |    Low |  Close | Predicted Close | Confidence Interval')
+                print('%.2f | %.2f | %.2f |          %.2f | %.2f - %.2f' % (self.ohlc_df.high[current_date], self.ohlc_df.high[current_date], self.ohlc_df.close[current_date], fcast, fcast_low, fcast_high))
+            high_diff = self.ohlc_df.high[current_date] - fcast_high
+            low_diff = self.ohlc_df.low[current_date] - fcast_low
+            if self.shares>0 and high_diff>0:
                 print('SPY high of day greater than top of confidence interval by %.2f' % high_diff) if verbose>1 else None
-                shares_to_sell, cash_received, trades = __sell_shares(shares, cash,
-                    current_date, trades, ohlc_df, stop_price=fcast_high,
-                    limit_offset_pc=limit_offset_pc, strat='all', verbose=verbose)
-                shares, cash, portfolio_value = __update_portfolio_value(current_date,
-                    shares, cash, -shares_to_sell, cash_received)
+                shares_to_sell, cash_received = self.__sell_shares(
+                    current_date, stop_price=fcast_high,
+                    strat='all', verbose=verbose)
+                self.__update_portfolio_value(current_date, -shares_to_sell, cash_received)
                 traded=True
 
-            elif cash>0 and low_diff<0:
+            elif self.cash>0 and low_diff<0:
                 print('SPY low of day less than bottom of confidence interval by %.2f' % low_diff) if verbose>1 else None
-                shares_to_buy, cash_spent, trades = __buy_shares(shares, cash,
-                    current_date, trades, ohlc_df, stop_price=fcast_low,
-                    limit_offset_pc=limit_offset_pc, strat='all', verbose=verbose)
-                shares, cash, portfolio_value = __update_portfolio_value(current_date,
-                    shares, cash, shares_to_buy, -cash_spent)
+                shares_to_buy, cash_spent = self.__buy_shares(
+                    current_date, stop_price=fcast_low,
+                    strat='all', verbose=verbose)
+                self.__update_portfolio_value(current_date, shares_to_buy, -cash_spent)
                 traded=True
 
             else:
                 print('Price movement for today is within confidence interval.\n-----------Holding-----------') if verbose>1 else None
-                shares, cash, port
 
-        mod_profit_df.loc[current_date,'shares'] = shares
-        mod_profit_df.loc[current_date,'cash'] = cash
-        mod_profit_df.loc[current_date,'trade'] = traded
-        mod_profit_df.loc[current_date,'portfolio_value'] = portfolio_value
-        mod_profit_df.loc[current_date,'eod_profit'] = portfolio_value - cost_basis
-        mod_profit_df.loc[current_date,'eod_profit_pc'] = 100*(portfolio_value - cost_basis)/cost_basis
+        self.mod_profit_df.loc[current_date,'shares'] = self.shares
+        self.mod_profit_df.loc[current_date,'cash'] = self.cash
+        self.mod_profit_df.loc[current_date,'trade'] = traded
+        self.mod_profit_df.loc[current_date,'portfolio_value'] = self.portfolio_value
+        self.mod_profit_df.loc[current_date,'eod_profit'] = self.portfolio_value - self.cost_basis
+        self.mod_profit_df.loc[current_date,'eod_profit_pc'] = 100*(self.portfolio_value - self.cost_basis)/self.cost_basis
 
         if verbose>1:
             print('EOD portfolio snapshot:')
             print('Shares | Cash | Portfolio Value')
-            print(f'{shares:,.4f} | ${cash:,.2f} | ${portfolio_value:,.2f} ')
+            print(f'{self.shares:,.4f} | ${self.cash:,.2f} | ${self.portfolio_value:,.2f} ')
             print('__________________________________________________________________')
 
-    def main():
-        print('Running `I SPY` model historical simulation...\n') if verbose else None
-        if start_date == None:
-            start_date = ohlc_df.index[0]
-        cost_basis = shares*ohlc_df.close[start_date]
+    def main(self):
+        print('Running `I SPY` model historical simulation...\n') if self.verbose else None
 
         # check if already fit
         try:
             self.model.named_steps['arima'].arroots()
         except Exception as e:
-            if verbose>1:
-                print('Fitting model to all exogenous variables... ', end='')
-                print('Done.')
-            self.model.fit(ohlc_df.close, exog_hist_df)
+            print('Fitting model to all exogenous variables... ', end='') if self.verbose>1 else None
+            self.model.fit(self.ohlc_df.close, self.exog_hist_df)
+            print('Done.') if self.verbose>1 else None
 
-        N = ohlc_df.shape[0]
-        mod_profit_df = pd.DataFrame(index=ohlc_df.index)
-        mod_profit_df['shares'] = np.zeros(N)
-        mod_profit_df['cash'] = np.zeros(N)
-        mod_profit_df['trade'] = np.zeros(N)
-        mod_profit_df['portfolio_value'] = np.zeros(N)
-        mod_profit_df['eod_profit'] = np.zeros(N)
-        mod_profit_df['eod_profit_pc'] = np.zeros(N)
+        N = self.ohlc_df.shape[0]
+        self.mod_profit_df = pd.DataFrame(index=self.ohlc_df.index)
+        self.mod_profit_df['shares'] = np.zeros(N)
+        self.mod_profit_df['cash'] = np.zeros(N)
+        self.mod_profit_df['trade'] = np.zeros(N)
+        self.mod_profit_df['portfolio_value'] = np.zeros(N)
+        self.mod_profit_df['eod_profit'] = np.zeros(N)
+        self.mod_profit_df['eod_profit_pc'] = np.zeros(N)
 
-        print('Performing step-wise calculation of profit using time iterative model forecasts...\n') if verbose>1 else None
-        if verbose:
-            [__calc_profit for index, current_date in enumerate(tqdm(ohlc_df.index, desc='Profit Calculation Loop'))]
+        print('Performing step-wise calculation of profit using time iterative model forecasts...\n') if self.verbose>1 else None
+        if self.verbose:
+            [self.__calc_profit(index, current_date, self.verbose) for index, current_date in enumerate(tqdm(self.ohlc_df.index, desc='Profit Calculation Loop'))]
         else:
-            [__calc_profit for index, current_date in enumerate(ohlc_df.index, desc='Profit Calculation Loop')]
+            [self.__calc_profit(index, current_date, self.verbose) for index, current_date in enumerate(self.ohlc_df.index)]
 
-        total_profit = portfolio_value-cost_basis
-        total_profit_pc = 100*(portfolio_value-cost_basis)/cost_basis
-        if verbose>1:
+        self.total_profit = self.portfolio_value-self.cost_basis
+        self.total_profit_pc = 100*(self.portfolio_value-self.cost_basis)/self.cost_basis
+        if self.verbose>1:
             print('Done.')
-            print(f'Made {trades} trades out of {N} trading days.')
-            print(f'Starting portfolio value was ${cost_basis:,.2f}.')
-            print(f'Final portfolio value is ${portfolio_value:,.2f}.')
-        if verbose:
-            print(f'Total profit is ${total_profit:,.2f}, which is a {total_profit_pc:,.2f}% profit.')
+            print(f'Made {self.trades} trades out of {N} trading days.')
+            print(f'Starting portfolio value was ${self.cost_basis:,.2f}.')
+            print(f'Final portfolio value is ${self.portfolio_value:,.2f}.')
+        if self.verbose:
+            print(f'Total profit is ${self.total_profit:,.2f}, which is a {self.total_profit_pc:,.2f}% profit.')
 
-        return predictions, conf_ints, total_profit, total_profit_pc, mod_profit_df
-
-        # return
-
-        # for index, current_date in enumerate(tqdm(ohlc_df.index, desc='Profit Calculation Loop')):
-
-            # print(f'Analyzing Day {index+1} - {current_date.date()}:') if verbose>1 else None
-            # # a little animation to pass the time
-            # if not verbose:
-            #     if index&1:
-            #         print('>_', end='\r')
-            #     else:
-            #         print('> ', end='\r')
-            # traded = False
-            # if index == 0:
-            #     # initialize as equal to the starting price to match dimensions
-            #     predictions.append(ohlc_df.close[current_date])
-            #     conf_ints.append([ohlc_df.close[current_date], ohlc_df.close[current_date]])
-            #     print('Nothing to do! We only just bought all the dang shares.') if verbose>1 else None
-            # else:
-            #     pred, conf_int = model.predict_in_sample(X=exog_hist_df[0:index+1],
-            #         start=index, end=index, return_conf_int=True, alpha=(2-stats.norm.cdf(z)*2))
-            #     predictions.append(pred[0])
-            #     conf_ints.append(conf_int.tolist()[0])
-            #     # print(len(y_hat))
-            #     fcast = pred[0]
-            #     fcast_low = conf_int[0][0]
-            #     fcast_high = conf_int[0][1]
-            #     if verbose>1:
-            #         print('High  |   Low  |  Close | Predicted Close | Confidence Interval')
-            #         print('%.2f  | %.2f | %.2f   | %.2f | %.2f - %.2f' % (ohlc_df.high[current_date], ohlc_df.high[current_date], ohlc_df.close[current_date], fcast, fcast_low, fcast_high))
-            #         # print(f'{ohlc_df.high[current_date]:.2f}   {ohlc_df.low[current_date]:.2f}  {ohlc_df.close[current_date]:.2f}   | {fcast:.2f} | {fcast_low:.2f} - {fcast_high:.2f}')
-            #     high_diff = ohlc_df.high[current_date] - fcast_high
-            #     low_diff = ohlc_df.low[current_date] - fcast_low
-            #     if shares>0 and high_diff>0:
-            #         print('SPY high of day greater than top of confidence interval by %.2f' % high_diff) if verbose>1 else None
-            #         shares_to_sell, cash_received, trades = __sell_shares(shares, cash,
-            #             current_date, trades, ohlc_df, stop_price=fcast_high,
-            #             limit_offset_pc=limit_offset_pc, strat='all', verbose=verbose)
-            #         shares, cash, portfolio_value = __update_portfolio_value(current_date,
-            #             shares, cash, -shares_to_sell, cash_received)
-            #         traded=True
-            #
-            #     elif cash>0 and low_diff<0:
-            #         print('SPY low of day less than bottom of confidence interval by %.2f' % low_diff) if verbose>1 else None
-            #         shares_to_buy, cash_spent, trades = __buy_shares(shares, cash,
-            #             current_date, trades, ohlc_df, stop_price=fcast_low,
-            #             limit_offset_pc=limit_offset_pc, strat='all', verbose=verbose)
-            #         shares, cash, portfolio_value = __update_portfolio_value(current_date,
-            #             shares, cash, shares_to_buy, -cash_spent)
-            #         traded=True
-            #
-            #     else:
-            #         print('Price movement for today is within confidence interval.\n-----------Holding-----------') if verbose>1 else None
-            #         shares, cash, portfolio_value = __update_portfolio_value(current_date, shares, cash, 0, 0)
-
-            # mod_profit_df.loc[current_date,'shares'] = shares
-            # mod_profit_df.loc[current_date,'cash'] = cash
-            # mod_profit_df.loc[current_date,'trade'] = traded
-            # mod_profit_df.loc[current_date,'portfolio_value'] = portfolio_value
-            # mod_profit_df.loc[current_date,'eod_profit'] = portfolio_value - cost_basis
-            # mod_profit_df.loc[current_date,'eod_profit_pc'] = 100*(portfolio_value - cost_basis)/cost_basis
-            #
-            # if verbose>1:
-            #     print('EOD portfolio snapshot:')
-            #     print('Shares | Cash | Portfolio Value')
-            #     print(f'{shares:,.4f} | ${cash:,.2f} | ${portfolio_value:,.2f} ')
-            #     print('__________________________________________________________________')
-            # time.sleep(5)
-
+        return self.predictions, self.conf_ints, self.total_profit, self.total_profit_pc, self.mod_profit_df
 
     if __name__ == "__main__":
         main()

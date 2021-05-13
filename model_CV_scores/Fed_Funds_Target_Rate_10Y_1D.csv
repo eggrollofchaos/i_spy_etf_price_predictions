@@ -30,4 +30,4 @@ Model,ARIMA_Order,Diffs,Mod_Order,Trend,Intercept,Date,Fourier,Fourier_m,Fourier
 28,"(0, 0, 0)",0,0,t,True,True,True,252.0,4.0,False,False,True,5817.261,1.1211,161.8623,96.335,2052.1976
 29,"(0, 0, 0)",0,0,ct,True,True,False,,,False,False,True,6485.0446,1.2164,175.631,95.2852,1529.3509
 30,"(0, 0, 0)",0,0,ct,True,True,True,252.0,4.0,False,False,True,6381.7996,1.2223,176.4717,96.0097,2383.4605
-31,"(1, 0, 0)",0,1,n,False,True,False,,,False,False,True,-10827.3296,0.0534,7.7103,0.6550,720.5880
+31,"(1, 0, 0)",0,1,n,False,True,False,,,False,False,True,-10827.3296,0.0534,7.7103,0.655,720.588
