@@ -24,7 +24,7 @@ class Gridsearch_Calc_Profit:
     '''
     def __init__(self, ts, model, ohlc_df, exog_hist_df, shares=1000,
         steps=10, z_min=0.5, z_max=2.5, lim_min=0, lim_max=1,
-        start_date=None, verbose=2):
+        start_date=None, visualize=True, verbose=2):
         self.ts = ts
         self.model = model
         self.ohlc_df = ohlc_df
@@ -88,6 +88,20 @@ class Gridsearch_Calc_Profit:
         # GS_mod_profit_df.append(mod_profit_dict, ignore_index=True)
         # return mod_profit_dict
 
+    def get_max_profit(self):
+        self.GS_best_z_lim = self.get_best_z_lim()
+        self.GS_max_profit = self.GS_mod_profit_df.sort_values(by='Total_Profit_pc', ascending=False).head(1)['Total_Profit'].values[0]
+        self.GS_max_profit_pc = self.GS_mod_profit_df.sort_values(by='Total_Profit_pc', ascending=False).head(1)['Total_Profit_pc'].values[0]
+        print(f'Best profit achieved with `z` = {self.GS_best_z_lim[0]} and `lim` = {self.GS_best_z_lim[1]}:')
+        print(f'${self.GS_max_profit:,.2f} | {self.GS_max_profit_pc:,.2f}%')
+        return self.GS_max_profit, self.GS_best_z_lim
+
+    def get_best_z_lim(self):
+        best_z = self.GS_mod_profit_df.sort_values(by='Total_Profit_pc', ascending=False).head(1)['z'].values[0]
+        best_lim = self.GS_mod_profit_df.sort_values(by='Total_Profit_pc', ascending=False).head(1)['Limit_Offset_pc'].values[0]
+        self.GS_best_z_lim = (best_z, best_lim)
+        return self.GS_best_z_lim
+
     def plot_profit_heatmap(self):
         tick_params = dict(size=4, width=1.5, labelsize=16)
         self.GS_mod_profit_pivot = self.GS_mod_profit_df.pivot(index='Limit_Offset_pc', columns='z', values='Total_Profit_pc')
@@ -133,6 +147,9 @@ class Gridsearch_Calc_Profit:
         ts_str = self.ts.replace(' ', '_').upper()
         self.GS_mod_profit_df.to_csv(f'{TOP}/model_profit_GS/{ts_str}_Profit_CV.csv')
         pickle_data(self.GS_mod_profit_df, f'{TOP}/model_profit_GS/{ts_str}_Profit_CV.pkl')
+
+        if visualize:
+            self.plot_profit_heatmap()
 
         return self.GS_mod_profit_df
 

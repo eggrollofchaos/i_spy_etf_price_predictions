@@ -49,8 +49,8 @@ class Model_Historical_Simuluation():
         self.predictions = []
         self.conf_ints = []
 
-    def __buy_shares(self, date, stop_price, strat='all', verbose=0):
-        limit_price = stop_price - self.limit_offset_pc*0.01*stop_price
+    def __buy_shares(self, date, quote_price, strat='all', verbose=0):
+        limit_price = quote_price - self.limit_offset_pc*0.01*quote_price
         if self.ohlc_df.low[date] < limit_price:       # limit order will be filled
             if strat=='all':
                 shares_to_buy = self.cash/limit_price
@@ -64,8 +64,8 @@ class Model_Historical_Simuluation():
         else:
             return 0, 0
 
-    def __sell_shares(self, date, stop_price, strat='all', verbose=0):
-        limit_price = stop_price + self.limit_offset_pc*0.01*stop_price
+    def __sell_shares(self, date, quote_price, strat='all', verbose=0):
+        limit_price = quote_price + self.limit_offset_pc*0.01*quote_price
         if self.ohlc_df.high[date] > limit_price:      # limit order will be filled
             if strat=='all':
                 shares_to_sell = self.shares
@@ -120,7 +120,7 @@ class Model_Historical_Simuluation():
             if self.shares>0 and high_diff>0:
                 print('SPY high of day greater than top of confidence interval by %.2f' % high_diff) if verbose>1 else None
                 shares_to_sell, cash_received = self.__sell_shares(
-                    current_date, stop_price=fcast_high,
+                    current_date, quote_price=fcast_high,
                     strat='all', verbose=verbose)
                 self.__update_portfolio_value(current_date, -shares_to_sell, cash_received)
                 traded=True
@@ -128,7 +128,7 @@ class Model_Historical_Simuluation():
             elif self.cash>0 and low_diff<0:
                 print('SPY low of day less than bottom of confidence interval by %.2f' % low_diff) if verbose>1 else None
                 shares_to_buy, cash_spent = self.__buy_shares(
-                    current_date, stop_price=fcast_low,
+                    current_date, quote_price=fcast_low,
                     strat='all', verbose=verbose)
                 self.__update_portfolio_value(current_date, shares_to_buy, -cash_spent)
                 traded=True

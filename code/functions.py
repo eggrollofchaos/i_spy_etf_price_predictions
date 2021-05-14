@@ -598,7 +598,7 @@ def calc_buy_hold_profit(ohlc_df, shares=20000, start_date=None):
     print(f'Total profit is ${total_profit:,.2f}, which is a {total_profit_pc:,.2f}% profit.')
     return total_profit, total_profit_pc, bh_profit_df
 
-def plot_profits(shares, bh_profit_df, mod_profit_df, close_df, conf_ints, start_date=None):
+def plot_profits(shares, bh_profit_df, mod_profit_df, close_df, conf_ints, GS=True, start_date=None):
 # def plot_profits(shares, spy_bh_vs_mod_data, start_date):
     # bh_profit_df = spy_bh_vs_mod_data[0]
     # mod_profit_df = spy_bh_vs_mod_data[1]
@@ -621,8 +621,15 @@ def plot_profits(shares, bh_profit_df, mod_profit_df, close_df, conf_ints, start
     spy_y_min = get_y_lim(list(zip(*data[3]))[0])[0]
     spy_y_max = get_y_lim(list(zip(*data[3]))[1])[1]
 
-    colors = ['b','c','g','orange']
-    labels = ['`Buy and Hold` Strategy', '`I SPY` Model Strategy', 'SPY Close Price', 'Model Confidence Intervals']
+    if GS == True:
+        colors = ['b','magenta','g','orange']
+        GS_str = ' GridSearch'
+        GS_file_str = '_GS'
+    else:
+        colors = ['b','c','g','orange']
+        GS_str = {}
+        GS_file_str = {}
+    labels = ['`Buy and Hold` Strategy', f'`I SPY`{GS_str} Model Strategy', 'SPY Close Price', 'Model Confidence Intervals']
     ylabels = ['Profit (USD)', '', 'Price (USD)', '']
     alpha = [0.9, 1, 1, 0.3]
     numticks = 11
@@ -663,10 +670,10 @@ def plot_profits(shares, bh_profit_df, mod_profit_df, close_df, conf_ints, start
     ax0.xaxis.get_offset_text().set_size(20)
     ax0.set_xlabel('Date', size=20)
     ax0.set_title(f'{shares:d} shares of SPY purchased @ price of ${close_df[0]:.2f} on {start_date.date()}.', size=20)
-    fig.suptitle('SPY - Comparison of `Buy and Hold` vs `I SPY` Model Strategy', size=24)
+    fig.suptitle(f'SPY - Comparison of `Buy and Hold` vs `I SPY`{GS_str} Model Strategy', size=24)
     fig.subplots_adjust(top=0.93)
     fig.legend(loc=(0.105, 0.81), prop={"size":16})
-    plt.savefig(f'{TOP}/images/SPY_Profit_Graph.png')
+    plt.savefig(f'{TOP}/images/SPY_Profit_Graph{GS_file_str}.png')
 
 class Gridsearch_Calc_Profit:
     '''
@@ -1057,7 +1064,7 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
         return dates[index].strftime(fmt)
     ax.xaxis.set_major_formatter(FuncFormatter(format_date))
     ax.set_xlabel(label, size = 18)
-    fig.autofmt_xdate()
+    # fig.autofmt_xdate()
 
 def plot_spy_fin(ohlc_data):
     fig, ax = plt.subplots(figsize=(16, 12))
