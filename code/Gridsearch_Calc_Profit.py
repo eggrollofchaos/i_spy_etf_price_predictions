@@ -125,7 +125,7 @@ class Gridsearch_Calc_Profit:
 
         fig.suptitle('Comparison of `z` vs `lim` Parameters on Profit %', size=26)
         fig.subplots_adjust(top=0.93)
-        plt.savefig(f'{TOP}/images/model_profit_GS/SPY_3Y_Model_Profit_Heatmap.png')
+        plt.savefig(f'{TOP}/images/model_profit/SPY_10Y_Model_Profit_Heatmap.png')
 
     def main(self):
         print(f'Running GridSearchCV on {self.ts} model trading strategy...')
