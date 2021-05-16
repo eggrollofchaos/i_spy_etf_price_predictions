@@ -59,7 +59,7 @@ from pathlib import Path
 TOP = Path(__file__ + '../../..').resolve()
 
 NYSE = mcal.get_calendar('NYSE')
-CBD = pd.offsets.CustomBusinessDay(calendar=NYSE)
+CBD = NYSE.holidays()
 
 # print(f'Pmdarima_Model.py loaded from {TOP}/data..')
 
@@ -312,15 +312,15 @@ class Pmdarima_Model:
     # @classmethod
     # def get_next_dates(cls, today, df_size, days):
     @staticmethod
-    def __get_next_dates(today, df_size, days_fc):
+    def __get_next_dates(today, df_size, days_fc, freq=CBD):
         '''
         Static method for getting new dates for out of sample predictions.
         Returns a list of Pandas Timestamps, a list of numerical indices extending
         the original numerical indices of the input DataFrame, and a DataFrame consisting
         of the two aforementioned lists.
         '''
-        next_day = today + CBD
-        new_dates = pd.date_range(start=next_day, periods=days_fc, freq=CBD)
+        next_day = today + freq
+        new_dates = pd.date_range(start=next_day, periods=days_fc, freq=freq)
         index_fc = range(df_size, df_size + days_fc)
         new_dates_df = pd.DataFrame(new_dates, index=index_fc, columns=['date'])
         return new_dates, index_fc, new_dates_df
@@ -920,41 +920,76 @@ class Pmdarima_Model:
             ax.set_title(f'Parameters: {self.mod_params}', size=24)
             plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Test_vs_Predict{conf}.png')
 
-    def plot_forecast_conf(self, ohlc_df=None, ohlc_fc_df=None, hist_df=None, y_hat=None, conf_ints=True, days_fc=5,
-            lookback=120, ylabel=None, fin=False, all_ohlc=False, func='GS'):
+    def plot_forecast_conf(self, ohlc_df=None, ohlc_fc_df=None, hist_df=None, y_hat=None, y_hat_df=None, conf_ints=True,
+            lookback=0, ylabel=None, fin=False, all_ohlc=False, func='GS'):
         '''
         Plot forecasts with optional confidence intervals. Can only be run after
         forecasts have been generated.
         '''
+        days_fc = self.days_fc                              # number of days to forecast
+        dates = self.df_with_fc.index                       # dates indices
+        hist_ind = np.arange(self.df.shape[0])              # set numerical indices for historical data
+        fc_ind = np.arange(self.df.shape[0], self.df.shape[0]+days_fc) # set numerical indices for forecast data
+        if lookback:
+            dates = dates[-lookback-days_fc:]               # get subset of dates
+            hist_ind = np.arange(lookback)                  # update indices
+            fc_ind = np.arange(lookback, lookback+days_fc)  # update indices
+            num_months = np.floor(dates.shape[0]/21)        # update num_months
+            numticks = int(num_months+1)                    # update numticks
+            while numticks>21:                              # cap at 21
+                numticks = int(np.ceil(num_months/2)+1)     # halve the number of ticks iteratively
+        ylabel=self.data_name                               # get time series name for filename and plot
+        df_with_fc = self.df_with_fc.loc[dates]             # truncate (if needed) and assign
+        conf_filename = ''                                  # initialize conf string in filename
+        conf_title = ''                                     # initialize conf string in fig title
 
-        ylabel=self.data_name
-        conf = ''
+        if fin:                                             # OHLC chart
+            ohlc_df = ohlc_df[-lookback:]                   # historical OHLC
+            all_ohlc_df = ohlc_df.append(ohlc_fc_df)        # for all OHLC, append forecasts
+        else:
+            hist_df = hist_df[-lookback:]                   # historical single variable plot
+
         # fig, ax = plt.subplots(figsize=(24, 16))
-        fig, ax = plt.subplots(figsize=(16, 12))
+        fig, ax = plt.subplots(figsize=(20, 12))            # originally (24,16)
+        # hist_ind, fc_ind = equidate_ax(fig, ax, df_with_fc.index.date, days_fc=days_fc)
+        ax.set_xlim(0, fc_ind[-1])
+        # print(hist_ind)
+        # print(fc_ind)
         if fin:
-            ax.set_xlim(0, lookback+days_fc+5)
             if not all_ohlc:
-                mpl.plot(ohlc_df[-lookback:], type='candle', style="yahoo", ax=ax)
-                ax.plot(range(lookback, lookback+days_fc), y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
+                mpl.plot(ohlc_df, type='candle', style="yahoo", ax=ax)
+                # ax.plot(range(lookback, lookback+days_fc), y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
+                ax.plot(fc_ind, y_hat_df, 'g.', markersize=7.5, alpha=0.7, label='Forecast')
             if all_ohlc:
-                mpl.plot(ohlc_df.append(ohlc_fc_df)[-lookback-days_fc:], type='candle', style="yahoo", ax=ax)
+                mpl.plot(all_ohlc_df, type='candle', style="yahoo", ax=ax)
         else: ## not fin
-            ax.plot(hist_df[-lookback:], color='blue', alpha=0.5, label='Historical')
-            ax.plot(self.new_dates, y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
-            ax.set_xlim(self.df_with_fc.index[-lookback-days_fc], self.df_with_fc.index[-1]+(lookback//20)*CBD)
+            # ax.plot(hist_df[-lookback:], color='blue', alpha=0.5, label='Historical')
+            # ax.plot(self.new_dates, y_hat, 'g.', markersize=10, alpha=0.7, label='Forecast')
+            # ax.set_xlim(self.df_with_fc.index[-lookback-days_fc], self.df_with_fc.index[-1]+(lookback//20)*CBD)
+            # hist_ind, fc_ind = equidate_ax(fig, ax, df_with_fc.index.date, days_fc=days_fc)
+            sns.lineplot(x=hist_ind, y=hist_df, color='blue', alpha=0.5, label='Historical')
+            sns.scatterplot(x=fc_ind, y=y_hat_df.iloc[:,0], color='g', s=15, alpha=1, label='Forecast')
+            plt.setp(ax.xaxis.get_majorticklabels(), ha="right", rotation=45, rotation_mode="anchor")
             # equidate_ax(fig, ax, self.df_with_fc[-lookback-days_fc:].index.date)
-            equidate_ax(fig, ax, self.df_with_fc[-lookback-days_fc:].index.date)
-            ax.set_ylim(get_y_lim(self.df_with_fc.close))
+        ax.set_ylim(get_y_lim(df_with_fc.iloc[:,0]))
+        equidate_ax(fig, ax, df_with_fc.index.date, days_fc=days_fc)
+        if lookback:
+            x_tick_locator = ticker.LinearLocator(numticks=numticks)
+            ax.get_xaxis().set_major_locator(x_tick_locator)
+        # ax.set_xticklabels(ax.xaxis.get_minorticklabels(), rotation=0)
         if conf_ints:
-            conf = '_Conf'
+            conf_filename = '_Conf'
+            conf_title = ' with Confidence Intervals'
             conf_int = np.asarray(self.fc_conf_ints)
             if fin:
-                ax.fill_between(range(lookback, lookback+days_fc),
+                # ax.fill_between(range(lookback, lookback+days_fc),
+                ax.fill_between(fc_ind,
                 conf_int[:, 0], conf_int[:, 1],
                 alpha=0.3, color='orange',
                 label="Confidence Intervals")
             else:
-                ax.fill_between(self.new_dates,
+                # ax.fill_between(self.new_dates,
+                ax.fill_between(fc_ind,
                 conf_int[:, 0], conf_int[:, 1],
                 alpha=0.3, facecolor='orange',
                 label="Confidence Intervals")
@@ -963,19 +998,17 @@ class Pmdarima_Model:
         ax.tick_params(axis='both', which='major', labelsize=16)
         ax.tick_params(axis='both', which='minor', labelsize=16)
         # fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Historical vs Forecast with Confidence Intervals\n', size=30)
-        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Historical vs Forecast with Confidence Intervals\n', size=24)
+        fig.suptitle(f'{ylabel} Time Series, {self.timeframe}, Freq = {self.freq}: Historical vs Forecast{conf_title}\n', size=24)
         ax.legend(loc='upper left', borderaxespad=0.5, prop={"size":20})
         if func == 'AA':
             ax.set_title(f'AutoARIMA Best Parameters: {self.AA_best_params}', size=24)
-            plt.savefig(f'{TOP}/images/AutoArima/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
+            plt.savefig(f'{TOP}/images/AutoArima/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf_filename}.png')
         elif func == 'GS':
             ax.set_title(f'GridSearch Best Parameters: {self.GS_best_params}', size=24)
-            plt.savefig(f'{TOP}/images/GridSearch/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
+            plt.savefig(f'{TOP}/images/GridSearch/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf_filename}.png')
         else:
             ax.set_title(f'Parameters: {self.mod_params}', size=24)
-            plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf}.png')
-
-
+            plt.savefig(f'{TOP}/images/{self.ts}_{self.tf}_{self.f}_Hist_vs_Forecast{conf_filename}.png')
 
     def __get_model_scores(self, y_test, y_hat, y_train, model, verbose=0, debug=False):
         try:
@@ -1211,7 +1244,7 @@ class Pmdarima_Model:
             self.plot_test_predict(self.y_hat, conf_ints=return_conf_int, ylabel=self.data_name, func='GS')
         return best_model, scores
 
-    def run_prediction(self, model, days_fc, en_ex, exog_fc_df=None, visualize=True, lookback=120,
+    def run_prediction(self, model, days_fc, en_ex, exog_fc_df=None, visualize=True, lookback=0,
                         fin=False, ohlc_df=None, exog_hist_df=None, func='GS', all_ohlc=False,
                         ohlc_fc_df=None, return_conf_int=True, verbose=1):
         '''
@@ -1229,10 +1262,18 @@ class Pmdarima_Model:
             print('Failed to initialize.')
             raise
 
+        self.days_fc = days_fc
         if en_ex == 'exog':
             hist_df = self.df
         else:
+            try:
+                assert(days_fc == exog_fc_df.shape[0]), "Scalar value `days_fc` and # of rows in `exog_fc_df` do not match."
+            except AssertionError as e:
+                print(e)
+                print(f'Number of rows implies `days_fc` should be {exog_fc_df.shape[0]}.')
+                raise
             hist_df = exog_hist_df
+            self.exog_df = exog_fc_df
         # try:
         #     assert(type(hist_df) in (pd.Series, pd.DataFrame)), "Historical exog data is not of type Pandas Series or DataFrame."
         #     # assert(type(hist_df) == (pd.DatetimeIndex)), "Historical data index is not of type Pandas DatetimeIndex."
@@ -1255,8 +1296,6 @@ class Pmdarima_Model:
                 var = 'Endogenous'
             print(f'Running Fit and Predict on {var} variable {self.data_name}...')
 
-        self.exog_df = exog_fc_df
-        self.days_fc = days_fc
 
         today = self.df.index[-1]
         # df_size = self.length
@@ -1278,11 +1317,11 @@ class Pmdarima_Model:
 
         if visualize:
             if fin:
-                self.plot_forecast_conf(ohlc_df=ohlc_df, y_hat=self.y_fc_hat,
-                conf_ints=return_conf_int, func=func, days_fc=self.days_fc, fin=fin,
+                self.plot_forecast_conf(ohlc_df=ohlc_df, y_hat_df=self.fc_df,
+                conf_ints=return_conf_int, func=func, fin=fin,
                 lookback=lookback, all_ohlc=all_ohlc, ohlc_fc_df=ohlc_fc_df)
             else:
-                self.plot_forecast_conf(hist_df=self.df, y_hat=self.y_fc_hat,
-                conf_ints=return_conf_int, func=func, days_fc=self.days_fc, fin=fin)
+                self.plot_forecast_conf(hist_df=self.df.iloc[:,0], y_hat_df=self.fc_df,
+                lookback=lookback, conf_ints=return_conf_int, func=func, fin=fin)
 
         return self.fc_df, self.y_fc_hat, self.new_dates_df, self.fc_conf_ints

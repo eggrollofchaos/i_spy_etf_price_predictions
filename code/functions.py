@@ -1043,7 +1043,7 @@ def get_av_next_data_slice(symbol, ts, y, m, interval = '60min', tries=0, verbos
             fieldnames, data_reader, data_slice, tries = get_av_next_data_slice(symbol, ts, y, m, interval, tries=tries, verbose=verbose)
     return fieldnames, data_reader, data_slice, tries
 
-def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
+def equidate_ax(fig, ax, dates, days_fc=None, fmt="%Y-%m-%d", label="Date"):
     """
     https://stackoverflow.com/questions/1273472/how-to-skip-empty-dates-weekends-in-a-financial-matplotlib-python-graph
     Sets all relevant parameters for an equidistant date-x-axis.
@@ -1059,11 +1059,18 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
         None
     """
     N = len(dates)
-    def format_date(index, pos):
+    def format_date(index, pos=None):
         index = np.clip(int(index + 0.5), 0, N - 1)
         return dates[index].strftime(fmt)
     ax.xaxis.set_major_formatter(FuncFormatter(format_date))
     ax.set_xlabel(label, size = 18)
+    if days_fc:
+        ind = np.arange(N-days_fc)
+        fc_ind = np.arange(N-days_fc, N)
+        return ind, fc_ind
+    else:
+        ind = np.arange(N)
+        return ind
     # fig.autofmt_xdate()
 
 def plot_spy_fin(ohlc_data):
