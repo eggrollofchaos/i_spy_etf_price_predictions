@@ -62,10 +62,10 @@ Our results so far are encouraging: our model predicted a year-end price of **$4
   - **Model_Historical_Simuluation.py** - class for running historical simulations
   - **Pmdarima_Model.py** - class for running pmdarima models and tools
 - **crisp_dm_process/** — directory for initial EDA and model notebook files
-  - **spy_av_eda.ipynb** — notebook file for data exploration and modeling on AlphaVantage data using SARIMAX
-  - **spy_eda_colab.ipynb** — notebook file for data exploration and modeling using Google Colab
-  - **spy_yf_eda.ipynb** — notebook file for data exploration and modeling on yfinance SPY data using pmdarima
-  - **spy_yf_fut_eda.ipynb** — notebook file for exploration and modeling using yfinance SPY Futures data
+  - **av_eod_eda_modeling.ipynb** — notebook file for data exploration and modeling on AlphaVantage data using SARIMAX
+  - **yf_eda_modeling_colab.ipynb** — notebook file for data exploration and modeling using Google Colab
+  - **yf_eda_modeing.ipynb** — notebook file for data exploration and modeling on yfinance SPY data using pmdarima
+  - **yf_fut_eda_modeling.ipynb** — notebook file for exploration and modeling using yfinance SPY Futures data
 - **data/** — directory of project data sets
 - **I SPY - ETF Price Predicitons.pdf** - presentation slides PDF
 - **images/** — directory containing all image files:
