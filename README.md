@@ -6,7 +6,7 @@ In this project, we examine and perform time series analysis on the [SPDR® S&P 
 ![finance](images/finance.jpeg)  
   
 ## Motivation  
-While institutional investors leverage enterprise-grade data feeds and models to plan and execute trades in the sub-second timeframe, amateur investors are limited primarily to free data and tools to make investment decisions. The goal is to take freely available public data and, leveraging machine learning modalities to predict the movement of financial instruments, help the little guy get on the right side of the trade, more often than not. The ticker 'SPY' (aka "Spiders") was chosen because it is well-established, highly liquid, and popular.
+While institutional investors leverage enterprise-grade data feeds and models to plan and execute trades in the sub-second timeframe, amateur investors are limited primarily to free data and tools to make investment decisions. The goal is to take freely available public data and, leveraging machine learning modalities to predict the movement of financial instruments, help the little guy get on the right side of the trade, more often than not. The ticker 'SPY' (aka "Spiders") was chosen because it is well-established, moderately volatile, and highly liquid.
 
 ## Data  
 Our primary SPY time series data comes the [yfinance API](https://github.com/ranaroussi/yfinance). We focused on the Close price marked at EOD of each trading data as well as the Volume traded as our first exogenous variable. Other exogenous variables -- the US Treasury 10 Year Note yield, the Federal Funds Target Rate, and the Federal Funds Effective rate -- come from the [Quandl API](https://www.quandl.com/tools/python). Our last exogenous variable is a binary indicator on whether a date is a SPY option expiry date; this was an engineered feature.
@@ -50,12 +50,13 @@ Our results so far are encouraging: our model predicted a year-end price of **$4
 
 ## Further Actions  
 - We will build a Buy/Hold/Sell indicator to recommend **trading decisions**, as well as implement a _profit calculator_ using historical data to evaluate _model performance_ in the real world compared against simpling buy and holding.  **DONE**
-- Using aditional **exogenous variables** such as SPY Futures data, recession dates, options trade data, options expiry date, jobs data, and Treasury yield curve data, we will be able to implement a more robust model.  **Done for options expiry dates, Treasury yield curve data, Federal Funds Target and Effective rates.
+- Using aditional **exogenous variables** such as SPY Futures data, recession dates, options trade data, options expiry date, jobs data, and Treasury yield curve data, we will be able to implement a more robust model.  **Done for options expiry dates, Treasury yield curve data, Federal Funds Target and Effective rates.**
 - Additional _time series_ **modeling** can be built using TBATS, Facebook Prophet. We can also explore _neural networks_ such as LSTM, RNN, CNN to model and predict on SPY closing price. Initial results on _logistic regression_ has shown some promise, and we can delve into that as well.  
 - We can build a **web-scraping tool** to gather and anayze _market sentiment_ on Twitter, Reddit, etc.
 - Using available libraries as well as creating our own, we can plot and incorporate **technical indicators** such as MACD, RSI, Bollinger Bands, Support/Resistance, Stochastic, CCI, OBV, and Elliot Wave Analysis into our model.  
-- Finally, we can create a **real-time model** that will automatically fetch and run models on each new observation. We can then build a _web app_ to allow us to access these predictions on the fly.  
-     
+- Finally, we can create a **real-time model** that will automatically fetch and run models on each new observation. We can then build a _web app_ to allow us to access these predictions on the fly.
+- Trade on it! By using the TD Ameritrade API, we can **algorithmically trade** based on our model predictions. This can be done with shorter time windows instead of once per day.
+
 ## Index  
 - **code/** — directory containing python code files
   - **functions.py** — helper functions
