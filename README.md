@@ -34,8 +34,9 @@ Using our custom GridSearchCV function, we found ideal parameters for our model 
 Via our historical simulation GridSearch, we found ideal strategy parameters for our model to maximize profit from trading using predicted prices vs observed SPY Close.
 Lastly, we forecasts 52 days ahead as well as until year-end for our exogenous variables and, using those as inputs, forecasted SPY Close 52 days and until year-end.
 
-Here is a summary of our best models for the 10 Year time series:
-Variable            | Parameters                                  |  AIC      | RMSE (% of mean) |  SMAPE
+Here is a summary of our best models for the 10 Year time series:  
+
+Variable            | Parameters                                  |  AIC      | RMSE (% of mean) |  SMAPE 
 :-------------------|:--------------------------------------------|----------:|-----------------:|---------:  
 Close               | Arima(4,1,6), Intercept, Trend='t', Fourier | 11939.92  |       4.59%      |  0.96%
 Volume              | Arima(1,0,1), No Intercept, Fourier, Log    |  849.94   |      24.86%      | 24.82%
