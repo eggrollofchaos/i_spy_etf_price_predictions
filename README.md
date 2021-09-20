@@ -57,32 +57,34 @@ Our results so far are encouraging: our model predicted a year-end price of **$4
 - Finally, we can create a **real-time model** that will automatically fetch and run models on each new observation. We can then build a _web app_ to allow us to access these predictions on the fly.
 - Trade on it! By using the TD Ameritrade API, we can **algorithmically trade** based on our model predictions. This can be done with shorter time windows instead of once per day.
 
-## Index  
-- **code/** — directory containing python code files
-  - **functions.py** — helper functions
-  - **Gridsearch_Calc_Profit.py** - class for running GridSearch on historical simulation parameters
-  - **Model_Historical_Simuluation.py** - class for running historical simulations
-  - **Pmdarima_Model.py** - class for running pmdarima models and tools
-- **crisp_dm_process/** — directory for initial EDA and model notebook files
-  - **av_eod_eda_modeling.ipynb** — notebook file for data exploration and modeling on AlphaVantage data using SARIMAX
-  - **yf_eda_modeling_colab.ipynb** — notebook file for data exploration and modeling using Google Colab
-  - **yf_eda_modeing.ipynb** — notebook file for data exploration and modeling on yfinance SPY data using pmdarima
-  - **yf_fut_eda_modeling.ipynb** — notebook file for exploration and modeling using yfinance SPY Futures data
-- **data/** — directory of project data sets
-- **I SPY - ETF Price Predicitons.pdf** - presentation slides PDF
-- **images/** — directory containing all image files:
-  - **AutoArima/** - AutoArima in-sample test predictions
-  - **GridSearch/** - AutoArima in-sample test predictions
-  - **model_profit/** - visualizations of historical simulation model profit and GridSearch heatmaps
-  - various EDA visualizations
-  - additional images for README
-- **model_CV_scores/** - directoring containing CSV files of Step-Wise Cross-Validation scores during time-series modeling
-- **model_profit_GS/** - directoring containing CSV and pickled files of historical simulation GridSearch
-- **models/** - directoring containing pickled model files
-- **README.md** - this file
-- **sound/** - directory containing audio file to provide alert after code execution
-- **Wei Alexander Xin - Data Science Final Presentation.mp4** - recording of presentation
-- **spy_final_notebook.ipynb** — final project notebook
+## Repository Structure
+    .
+    ├── code/                                       # python code files
+        ├── functions.py                            # helper functions
+        ├── Gridsearch_Calc_Profit.py               # class for running GridSearch on historical simulation parameters
+        ├── Model_Historical_Simuluation.py         # class for running historical simulations
+        ├── Pmdarima_Model.py                       # class for running pmdarima models and tools
+        └── regressions.py                          # code for running regressions
+    ├── crisp_dm_process/                           # initial EDA and model notebook files 
+        ├── av_eod_eda_modeling.ipynb               # data exploration and modeling on AlphaVantage data using SARIMAX
+        ├── yf_eda_modeling_colab.ipynb             # data exploration and modeling using Google Colab
+        ├── yf_eda_modeing.ipynb                    # data exploration and modeling on yfinance SPY data using pmdarima
+        └── yf_fut_eda_modeling.ipynb               # date exploration and modeling using yfinance SPY Futures data
+    ├── data/                                       # project data sets
+        └── prepared_data/                          # engineered data
+    ├── I SPY - ETF Price Predictions.pdf           # presentation slides PDF
+    ├── images/                                     # all image files, EDA visualizations, etc.
+        ├── AutoArima/                              # AutoArima in-sample test predictions
+        ├── Final Images/                           # curated images for README
+        ├── GridSearch/                             # GridSearch in-sample test predictions
+        └── model_profit/                           # visualizations of historical simulation model profit; GridSearch heatmaps
+    ├── model_CV_scores/                            # CSV files of Step-Wise Cross-Validation scores during time-series modeling
+    ├── model_profit_GS/                            # CSV and pickled files of historical simulation GridSearch
+    ├── models/                                     # pickled model files
+    ├── README.md                                   # this README
+    ├── sound/                                      # audio file to provide alert after code execution
+    ├── spy_final_notebook.ipynb                    # final project notebook
+    └── Wei Alexander Xin - Final Presentation.mp4  # recording of presentation
   
 ## Bibliography  
 1. Dataset:  
