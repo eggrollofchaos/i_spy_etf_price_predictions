@@ -44,6 +44,10 @@ We began testing with SARIMAX, the Python statsmodels implementation, however ou
 
 Instead, we write a custom implementation of pmdarima. Using the built-in AutoARIMA parameter discovery tool of Pmadarima, ARIMA (0, 1, 0) was recommended. However, further testing would show that this was insufficiently robust.
 
+Additionally, we tested and implemented the pmdarima preprocessing transformers: DateFeaturizer, FourierFeaturizer, BoxCoxEndogTransformer, and LogEndogTransformer. Our tests indicate that DateFeaturizera and FourierFeaturizer are optimal for our price and index time series, and that `volume` can be modeled better with the addition of LogEndogTransformer.
+
+The [Fourier Featurizer](https://alkaline-ml.com/pmdarima/modules/generated/pmdarima.preprocessing.FourierFeaturizer.html) is especially powerful because it enables the modeling of seasonality without explicitly fitting a seasonal order in SARIMAX. This approximation saves significant computation time, and even allows us to modeling _multiple_ seasonalities without letting our soup get cold.  
+
 ### Model Validation
 We wrote and implemented a Step-Wise Cross-Validation tool to make iterative in-sample predictions to determine model fit and accuracy. We built a custom GridSearch function to test out different model paremeters, scoring each model via the aforementioned StepWiseCV using RMSE and SMAPE, saved in CSV. Best models were found for each variable (target as well as all exogenous variables). Here are examples of visualization of this process: 
 ![finance](images/final_images/SPY_'Close'_10Y_1D_Test_vs_Predict_Conf.png)
