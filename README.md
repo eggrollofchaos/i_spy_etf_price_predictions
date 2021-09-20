@@ -1,7 +1,7 @@
 # I SPY: Time Series Analysis for SPY ETF for Flatiron School Data Science Immersive (Capstone Project)
   
 ## Overview  
-In this project, we examine and perform time series analysis on the [SPDR® S&P 500® ETF Trust](https://www.ssga.com/us/en/institutional/etfs/funds/spdr-sp-500-etf-trust-spy) to forecast future prices and inform trading decisions.  
+In this project, we examine and perform time series analysis on the [SPDR® S&P 500® ETF Trust](https://www.ssga.com/us/en/institutional/etfs/funds/spdr-sp-500-etf-trust-spy) to forecast future prices and inform trading decisions.  See also: [Medium article](https://medium.com/geekculture/i-spy-a-time-series-analysis-f12fc1e3252e) discussing this project.
 
 ![finance](images/finance.jpeg)  
   
