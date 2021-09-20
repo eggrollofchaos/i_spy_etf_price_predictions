@@ -90,8 +90,8 @@ We found our model was accurate enough such that trading with it using tuned hyp
 Our forecasting results so far are encouraging: the model predicted a year-end price of **$418.34**, representing an S&P Index level of 4183, which compares well against the average projection on [Wall Street](https://www.cnbc.com/market-strategist-survey-cnbc) of 4207.
 
 ## Further Actions  
-- We will build a Buy/Hold/Sell indicator to recommend **trading decisions**, as well as implement a _profit calculator_ using historical data to evaluate _model performance_ in the real world compared against simpling buy and holding.  **DONE**
-- Using aditional **exogenous variables** such as SPY Futures data, recession dates, options trade data, options expiry date, jobs data, and Treasury yield curve data, we will be able to implement a more robust model.  **Done for options expiry dates, Treasury yield curve data, Federal Funds Target and Effective rates.**
+- We will build a Buy/Hold/Sell indicator to recommend **trading decisions**, as well as implement a _profit calculator_ using historical data to evaluate _model performance_ in the real world compared against simpling buy and holding.  **[DONE]**
+- Using aditional **exogenous variables** such as SPY Futures data, recession dates, options trade data, options expiry date, jobs data, and Treasury yield curve data, we will be able to implement a more robust model.  **[DONE for options expiry dates, Treasury yield curve data, Federal Funds Target and Effective rates]**
 - Additional _time series_ **modeling** can be built using TBATS, Facebook Prophet. We can also explore _neural networks_ such as LSTM, RNN, CNN to model and predict on SPY closing price. Initial results on _logistic regression_ has shown some promise, and we can delve into that as well.  
 - We can build a **web-scraping tool** to gather and anayze _market sentiment_ on Twitter, Reddit, etc.
 - Using available libraries as well as creating our own, we can plot and incorporate **technical indicators** such as MACD, RSI, Bollinger Bands, Support/Resistance, Stochastic, CCI, OBV, and Elliot Wave Analysis into our model.  
