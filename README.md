@@ -95,7 +95,7 @@ Our forecasting results so far are encouraging: the model predicted a year-end p
 - Additional _time series_ **modeling** can be built using TBATS, Facebook Prophet. We can also explore _neural networks_ such as LSTM, RNN, CNN to model and predict on SPY closing price. Initial results on _logistic regression_ has shown some promise, and we can delve into that as well.  
 - We can build a **web-scraping tool** to gather and anayze _market sentiment_ on Twitter, Reddit, etc.
 - Using available libraries as well as creating our own, we can plot and incorporate **technical indicators** such as MACD, RSI, Bollinger Bands, Support/Resistance, Stochastic, CCI, OBV, and Elliot Wave Analysis into our model.  
-- Finally, we can create a **real-time model** that will automatically fetch and run models on each new observation (i.e. every new price). We can then build a _web app_ to allow us to access these predictions on the fly.
+- Finally, we can create a **real-time model** that will automatically fetch and run models on each new observation (i.e. every new price). We can then build a _web app_ to allow us to access prediction results as well as run models on demand from any browser.
 - Trade on it! By using the TD Ameritrade API, we can **algorithmically trade** based on our model predictions. And, this can be done with shorter time windows. Instead of taking the `Close` at EOD, we can take price snapshots throughout the day. Rather than making a comparison once a day and potentially trading on that comparison, we can algorithmically trade throughout the day.
 
 ## Repository Structure
