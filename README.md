@@ -20,7 +20,7 @@ We will forecast SPY closing price up through the end of the year (below from Ya
 
 ## Methods  
 Our methodology implements the CRISP-DM model for exploratory data analysis, cleaning, modeling, and evaluation.  
-We leveraged ARIMA modeling from [pmdarima](http://alkaline-ml.com/pmdarima/) to analyze and forecast SPY closing prices. We leveraged the Date Featurizer, Fourier Featurizer, and the Logarithmic Featurizer. The quality of our modeling was inferred from [AIC value](https://en.wikipedia.org/wiki/Akaike_information_criterion) and evaluated with [RMSE](https://en.wikipedia.org/wiki/Root-mean-square_deviation) and [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error). We also utilized statistical tools via [SciPy Stats](https://docs.scipy.org/doc/scipy/reference/stats.html) to adjust confidence intervals on the model predictions.  
+We extended ARIMA modeling from [pmdarima](http://alkaline-ml.com/pmdarima/) to analyze and forecast SPY closing prices. We leveraged the Date Featurizer, Fourier Featurizer, and the Logarithmic Featurizer. The quality of our modeling was inferred from [AIC value](https://en.wikipedia.org/wiki/Akaike_information_criterion) and evaluated with [RMSE](https://en.wikipedia.org/wiki/Root-mean-square_deviation) and [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error). We also utilized statistical tools via [SciPy Stats](https://docs.scipy.org/doc/scipy/reference/stats.html) to adjust confidence intervals on the model predictions.  
 Other tools used include NumPy, Pandas. Visualizations were created with MatPlotLib and Seaborn.  
 
 ## Approach
