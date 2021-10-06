@@ -70,7 +70,7 @@ After running ARIMA analysis on various combinations of timeframes, observation 
 Using our custom GridSearchCV function, we found ideal parameters for our model for the SPY Close as well as SPY Volume and each of our exogenous variables that minimize RMSE as a percent of the mean of the time series when compared against observed values. We also added a quarterly seasonality and a 4-year seasonality.
 Via our historical simulation GridSearch, we found ideal strategy parameters for our model to maximize profit from trading using predicted prices vs observed SPY Close.
 
-Lastly, we forecasts 52 days ahead as well as until year-end for our exogenous variables and, using those as inputs, forecasted SPY Close 52 days and until year-end. Here is the visualization, showing confidence intervals:
+Lastly, we forecast 52 days ahead as well as until year-end for our exogenous variables and, using those as inputs, forecasted SPY Close 52 days and until year-end. Here is the visualization, showing confidence intervals:
 ![finance](images/final_images/SPY_'Close'_10Y_1D_EOY_Forecast.png)
 
 ### Best Models
