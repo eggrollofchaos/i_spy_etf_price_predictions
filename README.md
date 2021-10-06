@@ -25,7 +25,7 @@ Other tools used include NumPy, Pandas. Visualizations were created with MatPlot
 
 ## Approach
 ### Data Gathering and Cleaning
-Using various sources, we collected time series data for our target (endogenous) variable and several exoenous variables. We also engineered a feature for option expiration dates.
+Using various sources, we collected time series data for our target (endogenous) variable and several exogenous variables. We also engineered a feature for option expiration dates.
 
 First we needed to ensure our various time series across all variables would match up in terms of number of observations. To do this, we pulled in [Pandas market calendars](https://pypi.org/project/pandas-market-calendars) and normalized all data against the NYSE calendar, interpolating (minimally) as needed.
 
