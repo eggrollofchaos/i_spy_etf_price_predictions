@@ -29,7 +29,7 @@ Using various sources, we collected time series data for our target (endogenous)
 
 First we needed to ensure our various time series across all variables would match up in terms of number of observations. To do this, we pulled in [Pandas market calendars](https://pypi.org/project/pandas-market-calendars) and normalized all data against the NYSE calendar, interpolating (minimally) as needed.
 
-Once all the data was loaded and normalized, we can visualize to get a sense of what the data looks like. Here is the 10 year slice showing our target variable and three of the exogenous variables:
+Once all the data was loaded and normalized, we can visualize to get a sense of what the data looks like. Below is the 10 year slice showing our target variable and three of the exogenous variables. Note the major dip corresponding to the Covid recession in 2020.
 ![finance](images/final_images/SPY_10Y_Comparison_Graph.png)  
 
 ### Time Series Analysis
