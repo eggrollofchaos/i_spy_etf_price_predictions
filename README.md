@@ -12,7 +12,7 @@ While institutional investors leverage enterprise-grade data feeds and models to
 Our primary SPY time series data comes the [yfinance API](https://github.com/ranaroussi/yfinance). We focused on the `Close` price marked at EOD of each trading data as well as the Volume traded as our first exogenous variable. Other exogenous variables -- the US Treasury 10 Year Note yield, the Federal Funds Target Rate, and the Federal Funds Effective rate -- come from the [Quandl API](https://www.quandl.com/tools/python). Our last exogenous variable is a binary indicator on whether a date is a SPY option expiry date (which are Mon/Wed/Fri except for trading holidays); this was an engineered feature.
 
 ### Historical Data  
-The SPY ETF, since it tracks the S&P 500 Index, show positive growth over time, and has tripled in price in the last 10 years. There is also some cyclical trends and seasonality present.  
+We will be looking at the SPY ETF, which tracks the S&P 500 Index. The SPY shows positive growth over time, and has tripled in price in the last 10 years. There is also some cyclical trends and seasonality present.  
  
 ### Target Variable  
 We will forecast SPY closing price up through the end of the year (below from Yahoo! Finance).
